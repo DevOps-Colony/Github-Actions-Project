@@ -11,8 +11,10 @@ env:
   HELM_CHART_PATH: ./helm/github-actions-app
   SONAR_PROJECT_KEY: DevOps-Colony_Github-Actions-Project
   SONAR_ORGANIZATION: DevOps-Colony
+  SONAR_HOST_URL: https://sonarcloud.io
 
 jobs:
+
   provision_terraform:
     runs-on: ubuntu-latest
     steps:
@@ -32,12 +34,14 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           AWS_REGION: ${{ env.AWS_REGION }}
 
-      - name: Deploy Infrastructure (VPC, EKS, ALB, RDS)
+      - name: Deploy Infrastructure (VPC, EKS, ALB, etc.)
         working-directory: ./infra/environments/staging
         run: |
           terraform init -backend-config="bucket=github-actions-project-tfstate" \
                           -backend-config="key=staging/terraform.tfstate" \
-                          -backend-config="region=${{ env.AWS_REGION }}"
+                          -backend-config="region=${{ env.AWS_REGION }}" \
+                          -backend-config="dynamodb_table=github-actions-project-locks" \
+                          -backend-config="encrypt=true"
           terraform apply -auto-approve
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
@@ -69,6 +73,7 @@ jobs:
 
       - name: Install Trivy
         run: |
+          sudo apt-get update -y
           sudo apt-get install -y wget apt-transport-https gnupg lsb-release
           wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | sudo apt-key add -
           echo deb https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main | sudo tee /etc/apt/sources.list.d/trivy.list
@@ -122,7 +127,7 @@ jobs:
           name: app-jar
           path: target/*.jar
 
-      - name: Checkout again (for sonar full git history)
+      - name: Checkout again (for Sonar full history)
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
@@ -131,7 +136,7 @@ jobs:
         uses: SonarSource/sonarqube-scan-action@v5.0.0
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-          SONAR_HOST_URL: https://sonarcloud.io
+          SONAR_HOST_URL: ${{ env.SONAR_HOST_URL }}
 
   build_docker_image_and_push:
     runs-on: ubuntu-latest

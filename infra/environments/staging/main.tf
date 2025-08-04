@@ -1,13 +1,7 @@
 terraform {
   required_version = ">= 1.4.0"
 
-  backend "s3" {
-    bucket         = "github-actions-project-tfstate"
-    key            = "staging/terraform.tfstate"
-    region         = "ap-south-1"
-    dynamodb_table = "github-actions-project-locks"
-    encrypt        = true
-  }
+  backend "s3" {}
 }
 
 provider "aws" {
