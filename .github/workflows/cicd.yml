@@ -22,10 +22,22 @@ jobs:
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
 
-      - name: Terraform Init & Apply
+      - name: Create Backend Bucket & Table (One-time)
+        working-directory: ./infra/modules/s3-backend
+        run: |
+          terraform init
+          terraform apply -auto-approve
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: ${{ env.AWS_REGION }}
+
+      - name: Deploy Infrastructure (VPC, EKS, ALB, RDS)
         working-directory: ./infra/environments/staging
         run: |
-          terraform init -upgrade
+          terraform init -backend-config="bucket=github-actions-project-tfstate" \
+                          -backend-config="key=staging/terraform.tfstate" \
+                          -backend-config="region=${{ env.AWS_REGION }}"
           terraform apply -auto-approve
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
