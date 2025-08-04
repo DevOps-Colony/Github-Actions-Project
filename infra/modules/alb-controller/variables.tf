@@ -13,8 +13,3 @@ variable "vpc_id" {
 variable "service_account_name" {
   type = string
 }
-
-variable "depends_on" {
-  description = "List of dependencies (e.g., IAM roles)"
-  type        = list(any)
-}

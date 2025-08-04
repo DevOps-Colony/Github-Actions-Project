@@ -29,5 +29,5 @@ resource "helm_release" "aws_load_balancer_controller" {
     value = var.service_account_name
   }
 
-  depends_on = [var.depends_on]
+  depends_on = [terraform_data.wait_for_iam]
 }
