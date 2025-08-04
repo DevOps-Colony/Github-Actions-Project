@@ -1,11 +1,51 @@
 variable "aws_region" {
-  default = "ap-south-1"
+  type    = string
+  default = "us-west-2"
 }
 
-variable "cluster_name" {
-  default = "github-actions-cluster"
+variable "name_prefix" {
+  type = string
 }
 
-variable "project_name" {
-  default = "github-actions-project"
+variable "environment" {
+  type = string
+}
+
+# S3 backend
+variable "s3_backend_bucket" {
+  type = string
+}
+
+variable "s3_dynamodb_table" {
+  type = string
+}
+
+# VPC
+variable "vpc_cidr" {
+  type = string
+}
+
+variable "public_subnet_cidrs" {
+  type = list(string)
+}
+
+variable "private_subnet_cidrs" {
+  type = list(string)
+}
+
+# IAM
+variable "eks_cluster_role_arn" {
+  type = string
+}
+
+variable "eks_node_role_arn" {
+  type = string
+}
+
+variable "alb_sg_id" {
+  type = string
+}
+
+variable "alb_service_account_name" {
+  type = string
 }
