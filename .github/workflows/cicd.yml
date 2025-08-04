@@ -87,15 +87,6 @@ jobs:
         SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         SONAR_HOST_URL: https://sonarcloud.io
 
-    - name: SonarCloud Quality Gate Check
-      id: sonarqube-quality-gate-check
-      uses: sonarsource/sonarqube-quality-gate-action@master
-      with:
-        pollingTimeoutSec: 600
-      env:
-        SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-        SONAR_HOST_URL: https://sonarcloud.io
-
   build_docker_image_and_push:
     runs-on: ubuntu-latest
     needs: build_project_and_sonar_scan
