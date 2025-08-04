@@ -1,3 +1,5 @@
-aws_region   = "ap-south-1"
-cluster_name = "github-actions-cluster"
-project_name = "github-actions-project"
+aws_region        = "ap-south-1"
+s3_backend_bucket = "terraform-github-actions-backend"
+s3_dynamodb_table = "terraform-locks"
+project_name      = "github-actions-project"
+cluster_name      = "github-actions-cluster"
