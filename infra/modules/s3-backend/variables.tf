@@ -1,9 +1,21 @@
 variable "bucket_name" {
-  description = "Name of the S3 bucket"
   type        = string
+  description = "The name of the S3 bucket for Terraform state"
 }
 
 variable "dynamodb_table" {
-  description = "Name of the DynamoDB table"
   type        = string
+  description = "The name of the DynamoDB table for state locking"
+}
+
+variable "force_destroy" {
+  type        = bool
+  description = "Whether to force destroy the bucket"
+  default     = false
+}
+
+variable "tags" {
+  type        = map(string)
+  description = "Tags to apply to all resources"
+  default     = {}
 }

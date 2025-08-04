@@ -8,68 +8,71 @@ terraform {
     dynamodb_table = "github-actions-project-locks"
     encrypt        = true
   }
-
-  required_providers {
-    aws = {
-      source  = "hashicorp/aws"
-      version = "~> 5.0"
-    }
-  }
 }
 
 provider "aws" {
   region = var.aws_region
 }
 
-data "aws_availability_zones" "available" {}
-
-module "s3_backend" {
-  source         = "../../modules/s3-backend"
-  bucket_name    = var.s3_backend_bucket
-  dynamodb_table = var.s3_dynamodb_table
+data "aws_availability_zones" "available" {
+  state = "available"
 }
 
 module "vpc" {
-  source               = "../../modules/vpc"
-  vpc_cidr             = var.vpc_cidr
-  public_subnets       = var.public_subnets
-  private_subnets      = var.private_subnets
-  availability_zones   = data.aws_availability_zones.available.names
+  source = "../../modules/vpc"
+
+  project_name         = var.project_name
   environment          = var.environment
-  project              = var.project
+  cidr_block           = var.vpc_cidr_block
+  azs                  = data.aws_availability_zones.available.names
+  public_subnet_cidrs  = var.public_subnet_cidrs
+  private_subnet_cidrs = var.private_subnet_cidrs
 }
 
 module "eks" {
-  source               = "../../modules/eks"
-  cluster_name         = var.cluster_name
-  vpc_id               = module.vpc.vpc_id
-  private_subnet_ids   = module.vpc.private_subnet_ids
-  public_subnet_ids    = module.vpc.public_subnet_ids
-  cluster_version      = var.cluster_version
-  environment          = var.environment
-  project              = var.project
-  node_instance_type   = var.node_instance_type
-  desired_capacity     = var.desired_capacity
-  max_capacity         = var.max_capacity
-  min_capacity         = var.min_capacity
+  source = "../../modules/eks"
+
+  cluster_name     = var.cluster_name
+  cluster_version  = var.cluster_version
+  vpc_id           = module.vpc.vpc_id
+  subnet_ids       = module.vpc.private_subnet_ids
+  node_group_name  = var.node_group_name
+  instance_types   = var.instance_types
+  desired_capacity = var.desired_capacity
+  min_size         = var.min_size
+  max_size         = var.max_size
+  tags             = var.tags
 }
 
 module "alb" {
-  source             = "../../modules/alb"
-  name               = var.project
-  vpc_id             = module.vpc.vpc_id
-  public_subnet_ids  = module.vpc.public_subnet_ids
-  target_port        = 80
-  environment        = var.environment
-  project            = var.project
+  source = "../../modules/alb"
+
+  name            = var.alb_name
+  vpc_id          = module.vpc.vpc_id
+  subnet_ids      = module.vpc.public_subnet_ids
+  internal        = false
+  security_groups = [module.eks.node_security_group_id]
+  tags            = var.tags
 }
 
 module "alb_controller" {
-  source                  = "../../modules/alb-controller"
-  cluster_name            = module.eks.cluster_name
-  oidc_provider_arn       = module.eks.oidc_provider_arn
-  service_account_name    = "aws-load-balancer-controller"
-  namespace               = "kube-system"
-  vpc_id                  = module.vpc.vpc_id
-  region                  = var.aws_region
+  source = "../../modules/alb-controller"
+
+  cluster_name         = var.cluster_name
+  region               = var.aws_region
+  vpc_id               = module.vpc.vpc_id
+  service_account_name = "aws-load-balancer-controller-sa"
+}
+
+module "s3_backend" {
+  source = "../../modules/s3-backend"
+
+  bucket_name    = "github-actions-project-tfstate"
+  dynamodb_table = "github-actions-project-locks"
+  force_destroy  = true
+
+  tags = {
+    Environment = var.environment
+    Project     = var.project_name
+  }
 }

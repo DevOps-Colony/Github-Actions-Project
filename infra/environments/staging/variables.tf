@@ -1,80 +1,74 @@
 variable "aws_region" {
-  description = "AWS region"
   type        = string
-  default     = "ap-south-1"
+  description = "AWS region to deploy resources in"
 }
 
-variable "project" {
-  description = "Project name"
+variable "project_name" {
   type        = string
-  default     = "github-actions-project"
+  description = "Name of the project"
 }
 
 variable "environment" {
-  description = "Environment name"
   type        = string
-  default     = "staging"
+  description = "Deployment environment name"
 }
 
-variable "s3_backend_bucket" {
-  description = "Name of the S3 bucket for Terraform state"
+variable "vpc_cidr_block" {
   type        = string
-  default     = "github-actions-project-tfstate"
-}
-
-variable "s3_dynamodb_table" {
-  description = "Name of the DynamoDB table for state locking"
-  type        = string
-  default     = "github-actions-project-locks"
-}
-
-variable "vpc_cidr" {
   description = "CIDR block for the VPC"
-  type        = string
-  default     = "10.0.0.0/16"
 }
 
-variable "public_subnets" {
-  description = "List of public subnet CIDRs"
+variable "public_subnet_cidrs" {
   type        = list(string)
-  default     = ["10.0.1.0/24", "10.0.2.0/24"]
+  description = "List of CIDR blocks for public subnets"
 }
 
-variable "private_subnets" {
-  description = "List of private subnet CIDRs"
+variable "private_subnet_cidrs" {
   type        = list(string)
-  default     = ["10.0.3.0/24", "10.0.4.0/24"]
+  description = "List of CIDR blocks for private subnets"
 }
 
 variable "cluster_name" {
-  description = "EKS cluster name"
   type        = string
-  default     = "github-actions-cluster-staging"
+  description = "EKS Cluster name"
 }
 
 variable "cluster_version" {
-  description = "EKS Kubernetes version"
   type        = string
-  default     = "1.29"
+  description = "EKS Cluster version"
 }
 
-variable "node_instance_type" {
-  description = "EC2 instance type for EKS nodes"
+variable "node_group_name" {
   type        = string
-  default     = "t3.medium"
+  description = "EKS node group name"
+}
+
+variable "instance_types" {
+  type        = list(string)
+  description = "List of EC2 instance types for the EKS worker nodes"
 }
 
 variable "desired_capacity" {
-  type    = number
-  default = 2
+  type        = number
+  description = "Desired number of worker nodes"
 }
 
-variable "max_capacity" {
-  type    = number
-  default = 3
+variable "min_size" {
+  type        = number
+  description = "Minimum number of worker nodes"
 }
 
-variable "min_capacity" {
-  type    = number
-  default = 1
+variable "max_size" {
+  type        = number
+  description = "Maximum number of worker nodes"
+}
+
+variable "alb_name" {
+  type        = string
+  description = "Name of the Application Load Balancer"
+}
+
+variable "tags" {
+  type        = map(string)
+  description = "Common tags for all resources"
 }
