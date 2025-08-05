@@ -19,3 +19,13 @@ variable "tags" {
   description = "Tags to apply to all resources"
   default     = {}
 }
+
+variable "bucket_name" {
+  description = "The name of the S3 bucket for Terraform backend state"
+  type        = string
+}
+
+variable "dynamodb_table" {
+  description = "The name of the DynamoDB table for Terraform state locking"
+  type        = string
+}
