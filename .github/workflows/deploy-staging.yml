@@ -9,6 +9,10 @@ on:
       - 'README.md'
   workflow_dispatch:
 
+permissions:
+  contents: read
+  security-events: write  
+
 env:
   AWS_REGION: us-west-2
   ENVIRONMENT: staging
