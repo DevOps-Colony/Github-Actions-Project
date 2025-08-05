@@ -111,14 +111,14 @@ jobs:
     - name: Terraform Init
       run: terraform init
 
-
-    - name: Check & force unlock stale state lock (staging only)
-      if: needs.determine-environment.outputs.environment == 'staging'
+    - name: Check & force unlock stale Terraform lock
+      if: always()
       run: |
-        echo "Checking for stale Terraform locks in DynamoDB..."
+        LOCK_TABLE_NAME="terraform-state-lock-${{ needs.determine-environment.outputs.environment }}"
+        echo "Checking for stale Terraform locks in DynamoDB table: $LOCK_TABLE_NAME..."
         
         LOCK_ID=$(aws dynamodb scan \
-          --table-name terraform-state-lock-${{ needs.determine-environment.outputs.environment }} \
+          --table-name "$LOCK_TABLE_NAME" \
           --region ${{ env.AWS_REGION }} \
           --query "Items[].LockID.S" \
           --output text)
@@ -129,6 +129,7 @@ jobs:
         else
           echo "No lock found, continuing..."
         fi
+
 
 
     - name: Terraform Plan
