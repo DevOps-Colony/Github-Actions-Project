@@ -87,7 +87,7 @@ env:
   - name: SPRING_PROFILES_ACTIVE
     value: "dev"
 
-# Database configuration (will be overridden by environment-specific values)
+# Database configuration (will be overridden by environment-specific values if provided)
 database:
   host: ""
   name: "bankapp"
