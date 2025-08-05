@@ -83,3 +83,9 @@ variable "dynamodb_table" {
   type        = string
   description = "The name of the DynamoDB table for Terraform state locking"
 }
+
+variable "force_destroy" {
+  type        = bool
+  description = "Boolean that indicates all objects should be deleted from the bucket so that the bucket can be destroyed without error"
+  default     = true
+}
