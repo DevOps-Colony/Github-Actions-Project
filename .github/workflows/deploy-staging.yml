@@ -17,6 +17,7 @@ env:
   AWS_REGION: us-west-2
   ENVIRONMENT: staging
   JAVA_VERSION: '17'
+  ECR_REPOSITORY: bankapp
 
 jobs:
   test-and-security:
