@@ -2,14 +2,9 @@ name: Infrastructure Deployment
 
 on:
   push:
-    branches: [ main, develop ]
-    paths:
-      - 'infra/**'
-      - '.github/workflows/infrastructure.yml'
+    branches: [ main, develop ]   # run for any push to main or develop
   pull_request:
-    branches: [ main, develop ]
-    paths:
-      - 'infra/**'
+    branches: [ main, develop ]   # run on PRs to main or develop
   workflow_dispatch:
     inputs:
       environment:
