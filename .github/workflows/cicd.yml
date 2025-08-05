@@ -12,6 +12,8 @@ env:
   SONAR_PROJECT_KEY: DevOps-Colony_Github-Actions-Project
   SONAR_ORGANIZATION: DevOps-Colony
   SONAR_HOST_URL: https://sonarcloud.io
+  TF_BUCKET_NAME: github-actions-project-tfstate
+  TF_DYNAMODB_TABLE: github-actions-project-locks
 
 jobs:
 
@@ -28,7 +30,9 @@ jobs:
         working-directory: ./infra/modules/s3-backend
         run: |
           terraform init
-          terraform apply -auto-approve
+          terraform apply -auto-approve \
+            -var="bucket_name=${{ env.TF_BUCKET_NAME }}" \
+            -var="dynamodb_table=${{ env.TF_DYNAMODB_TABLE }}"
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
@@ -37,12 +41,15 @@ jobs:
       - name: Deploy Infrastructure (VPC, EKS, ALB, etc.)
         working-directory: ./infra/environments/staging
         run: |
-          terraform init -backend-config="bucket=github-actions-project-tfstate" \
-                          -backend-config="key=staging/terraform.tfstate" \
-                          -backend-config="region=${{ env.AWS_REGION }}" \
-                          -backend-config="dynamodb_table=github-actions-project-locks" \
-                          -backend-config="encrypt=true"
-          terraform apply -auto-approve
+          terraform init \
+            -backend-config="bucket=${{ env.TF_BUCKET_NAME }}" \
+            -backend-config="key=staging/terraform.tfstate" \
+            -backend-config="region=${{ env.AWS_REGION }}" \
+            -backend-config="dynamodb_table=${{ env.TF_DYNAMODB_TABLE }}" \
+            -backend-config="encrypt=true"
+          terraform apply -auto-approve \
+            -var="bucket_name=${{ env.TF_BUCKET_NAME }}" \
+            -var="dynamodb_table=${{ env.TF_DYNAMODB_TABLE }}"
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
