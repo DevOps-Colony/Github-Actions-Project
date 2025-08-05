@@ -111,10 +111,6 @@ jobs:
     - name: Terraform Init
       run: terraform init
 
-    - name: Terraform Plan
-      id: plan
-      run: terraform plan -out=tfplan
-
 
     - name: Check & force unlock stale state lock (staging only)
       if: needs.determine-environment.outputs.environment == 'staging'
@@ -134,10 +130,14 @@ jobs:
           echo "No lock found, continuing..."
         fi
 
+
+    - name: Terraform Plan
+      id: plan
+      run: terraform plan -out=tfplan
+
     - name: Terraform Apply
       if: steps.plan.outcome == 'success' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')
       run: terraform apply -auto-approve tfplan
-
 
     - name: Get Infrastructure Outputs
       id: outputs
