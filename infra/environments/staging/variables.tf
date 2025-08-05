@@ -73,19 +73,21 @@ variable "tags" {
   description = "Common tags for all resources"
 }
 
-# Backend variables (only declared once here)
+# ✅ Added for backend automation
 variable "bucket_name" {
   type        = string
-  description = "The name of the S3 bucket for Terraform backend state"
+  description = "Name of the S3 bucket for Terraform backend"
+  default     = "github-actions-project-tfstate"
 }
 
 variable "dynamodb_table" {
   type        = string
-  description = "The name of the DynamoDB table for Terraform state locking"
+  description = "Name of the DynamoDB table for Terraform state locking"
+  default     = "github-actions-project-locks"
 }
 
 variable "force_destroy" {
   type        = bool
-  description = "Boolean that indicates all objects should be deleted from the bucket so that the bucket can be destroyed without error"
+  description = "Whether to force destroy the S3 bucket on deletion"
   default     = true
 }

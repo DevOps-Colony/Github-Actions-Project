@@ -20,3 +20,8 @@ tags = {
   Environment = "staging"
   Project     = "github-actions-project"
 }
+
+# ✅ Backend automation vars
+bucket_name    = "github-actions-project-tfstate"
+dynamodb_table = "github-actions-project-locks"
+force_destroy  = true
