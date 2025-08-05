@@ -72,3 +72,14 @@ variable "tags" {
   type        = map(string)
   description = "Common tags for all resources"
 }
+
+# Backend variables (only declared once here)
+variable "bucket_name" {
+  type        = string
+  description = "The name of the S3 bucket for Terraform backend state"
+}
+
+variable "dynamodb_table" {
+  type        = string
+  description = "The name of the DynamoDB table for Terraform state locking"
+}

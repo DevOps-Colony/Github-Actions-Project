@@ -1,7 +1,13 @@
 terraform {
   required_version = ">= 1.4.0"
 
-  backend "s3" {}
+  backend "s3" {
+    bucket         = var.bucket_name
+    key            = "staging/terraform.tfstate"
+    region         = var.aws_region
+    dynamodb_table = var.dynamodb_table
+    encrypt        = true
+  }
 }
 
 provider "aws" {
@@ -12,6 +18,7 @@ data "aws_availability_zones" "available" {
   state = "available"
 }
 
+# -------------------- VPC --------------------
 module "vpc" {
   source = "../../modules/vpc"
 
@@ -23,6 +30,7 @@ module "vpc" {
   private_subnet_cidrs = var.private_subnet_cidrs
 }
 
+# -------------------- EKS --------------------
 module "eks" {
   source = "../../modules/eks"
 
@@ -38,6 +46,7 @@ module "eks" {
   tags             = var.tags
 }
 
+# -------------------- ALB --------------------
 module "alb" {
   source = "../../modules/alb"
 
@@ -49,6 +58,7 @@ module "alb" {
   tags            = var.tags
 }
 
+# -------------------- ALB Controller --------------------
 module "alb_controller" {
   source = "../../modules/alb-controller"
 
@@ -58,11 +68,12 @@ module "alb_controller" {
   service_account_name = "aws-load-balancer-controller-sa"
 }
 
+# -------------------- S3 Backend Auto-Creation --------------------
 module "s3_backend" {
   source = "../../modules/s3-backend"
 
-  bucket_name    = "github-actions-project-tfstate"
-  dynamodb_table = "github-actions-project-locks"
+  bucket_name    = var.bucket_name
+  dynamodb_table = var.dynamodb_table
   force_destroy  = true
 
   tags = {
