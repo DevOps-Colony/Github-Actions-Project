@@ -18,6 +18,7 @@ env:
   ENVIRONMENT: staging
   JAVA_VERSION: '17'
   ECR_REPOSITORY: bankapp
+  EKS_CLUSTER_NAME: bankapp-staging-cluster
 
 jobs:
   test-and-security:
