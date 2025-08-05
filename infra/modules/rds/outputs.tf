@@ -1,5 +1,3 @@
-# infra/modules/rds/outputs.tf
-
 # Database Instance Information
 output "db_instance_id" {
   description = "The RDS instance ID"
@@ -51,7 +49,7 @@ output "db_instance_username" {
 
 output "db_instance_password" {
   description = "The database password (this password may be old, because Terraform doesn't track it after initial creation)"
-  value       = var.password != null ? var.password : (length(random_password.db_password) > 0 ? random_password.db_password[0].result : null)
+  value       = try(var.password, try(random_password.db_password[0].result, ""))
   sensitive   = true
 }
 
@@ -96,22 +94,22 @@ output "db_instance_publicly_accessible" {
 # Parameter and Option Groups
 output "db_parameter_group_id" {
   description = "The db parameter group name"
-  value       = var.create_parameter_group ? aws_db_parameter_group.main[0].id : null
+  value       = try(aws_db_parameter_group.main[0].id, "")
 }
 
 output "db_parameter_group_arn" {
   description = "The ARN of the db parameter group"
-  value       = var.create_parameter_group ? aws_db_parameter_group.main[0].arn : null
+  value       = try(aws_db_parameter_group.main[0].arn, "")
 }
 
 output "db_option_group_id" {
   description = "The db option group name"
-  value       = var.create_option_group ? aws_db_option_group.main[0].id : null
+  value       = try(aws_db_option_group.main[0].id, "")
 }
 
 output "db_option_group_arn" {
   description = "The ARN of the db option group"
-  value       = var.create_option_group ? aws_db_option_group.main[0].arn : null
+  value       = try(aws_db_option_group.main[0].arn, "")
 }
 
 # Security and Network
@@ -133,7 +131,7 @@ output "db_security_group_id" {
 # Monitoring and Logging
 output "enhanced_monitoring_iam_role_arn" {
   description = "The Amazon Resource Name (ARN) specifying the monitoring role"
-  value       = var.monitoring_interval > 0 ? aws_iam_role.rds_enhanced_monitoring[0].arn : null
+  value       = try(aws_iam_role.rds_enhanced_monitoring[0].arn, "")
 }
 
 output "cloudwatch_log_groups" {
@@ -144,34 +142,34 @@ output "cloudwatch_log_groups" {
 # Secrets Manager
 output "secrets_manager_secret_id" {
   description = "The ID of the Secrets Manager secret"
-  value       = var.create_secrets_manager_secret ? aws_secretsmanager_secret.db_credentials[0].id : null
+  value       = try(aws_secretsmanager_secret.db_credentials[0].id, "")
 }
 
 output "secrets_manager_secret_arn" {
   description = "The ARN of the Secrets Manager secret"
-  value       = var.create_secrets_manager_secret ? aws_secretsmanager_secret.db_credentials[0].arn : null
+  value       = try(aws_secretsmanager_secret.db_credentials[0].arn, "")
 }
 
 # Read Replica
 output "read_replica_identifier" {
   description = "The identifier of the read replica"
-  value       = var.create_read_replica ? aws_db_instance.read_replica[0].identifier : null
+  value       = try(aws_db_instance.read_replica[0].identifier, "")
 }
 
 output "read_replica_endpoint" {
   description = "The endpoint of the read replica"
-  value       = var.create_read_replica ? aws_db_instance.read_replica[0].endpoint : null
+  value       = try(aws_db_instance.read_replica[0].endpoint, "")
 }
 
 output "read_replica_arn" {
   description = "The ARN of the read replica"
-  value       = var.create_read_replica ? aws_db_instance.read_replica[0].arn : null
+  value       = try(aws_db_instance.read_replica[0].arn, "")
 }
 
 # Connection String (for applications)
 output "connection_string" {
   description = "Database connection string"
-  value       = "mysql://${aws_db_instance.main.username}:${var.password != null ? var.password : (length(random_password.db_password) > 0 ? random_password.db_password[0].result : "PASSWORD")}@${aws_db_instance.main.endpoint}/${aws_db_instance.main.db_name}"
+  value       = "mysql://${aws_db_instance.main.username}:${try(var.password, try(random_password.db_password[0].result, "PASSWORD"))}@${aws_db_instance.main.endpoint}/${aws_db_instance.main.db_name}"
   sensitive   = true
 }
 
