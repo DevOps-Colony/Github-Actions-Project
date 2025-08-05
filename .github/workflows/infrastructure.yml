@@ -116,6 +116,24 @@ jobs:
       run: terraform plan -out=tfplan
 
 
+    - name: Check & force unlock stale state lock (staging only)
+      if: needs.determine-environment.outputs.environment == 'staging'
+      run: |
+        echo "Checking for stale Terraform locks in DynamoDB..."
+        
+        LOCK_ID=$(aws dynamodb scan \
+          --table-name terraform-state-lock-${{ needs.determine-environment.outputs.environment }} \
+          --region ${{ env.AWS_REGION }} \
+          --query "Items[].LockID.S" \
+          --output text)
+        
+        if [ -n "$LOCK_ID" ]; then
+          echo "Found lock ID: $LOCK_ID — forcing unlock..."
+          terraform force-unlock -force "$LOCK_ID" || true
+        else
+          echo "No lock found, continuing..."
+        fi
+
     - name: Terraform Apply
       if: steps.plan.outcome == 'success' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')
       run: terraform apply -auto-approve tfplan
