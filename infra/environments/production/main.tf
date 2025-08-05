@@ -1,4 +1,4 @@
-# infra/environments/staging/main.tf
+# infra/environments/production/main.tf
 
 terraform {
   required_version = ">= 1.0"
@@ -14,10 +14,10 @@ terraform {
   }
   
   backend "s3" {
-    bucket         = "bankapp-terraform-state-staging-2024"
-    key            = "staging/terraform.tfstate"
+    bucket         = "bankapp-terraform-state-production-2024"
+    key            = "production/terraform.tfstate"
     region         = "us-west-2"
-    dynamodb_table = "terraform-state-lock-staging"
+    dynamodb_table = "terraform-state-lock-production"
     encrypt        = true
   }
 }
@@ -67,7 +67,7 @@ module "eks" {
       max_capacity     = var.eks_node_max_capacity
       min_capacity     = var.eks_node_min_capacity
       instance_types   = var.eks_node_instance_types
-      capacity_type    = "SPOT"   # Use SPOT for staging to save costs
+      capacity_type    = "ON_DEMAND"   # Use ON_DEMAND for production reliability
       
       k8s_labels = {
         Environment = var.environment
@@ -82,7 +82,7 @@ module "eks" {
   }
 }
 
-# RDS Module
+# RDS Module - Production Configuration
 module "rds" {
   source = "../../modules/rds"
   
@@ -104,54 +104,89 @@ module "rds" {
   allowed_security_groups  = [module.eks.cluster_security_group_id]
   publicly_accessible      = false
   
-  # Storage configuration (smaller for staging)
-  allocated_storage     = 20
-  max_allocated_storage = 50
-  storage_type         = "gp2"
+  # Storage configuration (larger for production)
+  allocated_storage     = 100
+  max_allocated_storage = 1000
+  storage_type         = "gp3"
   storage_encrypted    = true
   
-  # Backup configuration (minimal for staging)
-  backup_retention_period = 1
-  backup_window          = "07:00-08:00"
-  maintenance_window     = "Sun:08:00-Sun:09:00"
+  # Backup configuration (robust for production)
+  backup_retention_period = 14
+  backup_window          = "07:00-09:00"
+  maintenance_window     = "Sun:09:00-Sun:11:00"
+  copy_tags_to_snapshot  = true
   
-  # High availability (disabled for staging to save costs)
-  multi_az = false
+  # High availability (enabled for production)
+  multi_az = true
   
-  # Monitoring (basic for staging)
-  monitoring_interval        = 0
-  performance_insights_enabled = false
+  # Monitoring (comprehensive for production)
+  monitoring_interval                    = 60
+  performance_insights_enabled           = true
+  performance_insights_retention_period  = 7
   
-  # Logging
-  enabled_cloudwatch_logs_exports = ["error"]
-  cloudwatch_log_group_retention_in_days = 3
+  # Logging (comprehensive for production)
+  enabled_cloudwatch_logs_exports = ["error", "general", "slow_query"]
+  cloudwatch_log_group_retention_in_days = 30
   
-  # Deletion protection (disabled for staging)
-  deletion_protection = false
-  skip_final_snapshot = true
+  # Deletion protection (enabled for production)
+  deletion_protection = true
+  skip_final_snapshot = false
   
-  # Create secrets manager secret for staging
+  # Create secrets manager secret for production
   create_secrets_manager_secret = true
+  secrets_manager_recovery_window_in_days = 7
+  
+  # Create read replica for production
+  create_read_replica = true
+  read_replica_instance_class = "db.t3.small"
+  
+  # Enhanced parameter configuration for production
+  parameters = [
+    {
+      name  = "innodb_buffer_pool_size"
+      value = "{DBInstanceClassMemory*3/4}"
+    },
+    {
+      name  = "max_connections"
+      value = "2000"
+    },
+    {
+      name  = "slow_query_log"
+      value = "1"
+    },
+    {
+      name  = "long_query_time"
+      value = "1"
+    },
+    {
+      name  = "general_log"
+      value = "1"
+    },
+    {
+      name  = "innodb_log_file_size"
+      value = "268435456"  # 256MB
+    },
+    {
+      name  = "query_cache_type"
+      value = "1"
+    },
+    {
+      name  = "query_cache_size"
+      value = "67108864"  # 64MB
+    }
+  ]
   
   tags = {
     Environment = var.environment
     Project     = var.project_name
+    Backup      = "required"
+    Monitoring  = "enabled"
   }
 }
 
 # ECR Repository (shared across environments)
-resource "aws_ecr_repository" "app_repo" {
-  name                 = var.project_name
-  image_tag_mutability = "MUTABLE"
-
-  image_scanning_configuration {
-    scan_on_push = true
-  }
-
-  tags = {
-    Environment = var.environment
-    Project     = var.project_name
-  }
+data "aws_ecr_repository" "app_repo" {
+  name = var.project_name
 }
 
 # Application Load Balancer
@@ -162,11 +197,50 @@ resource "aws_lb" "app_alb" {
   security_groups    = [aws_security_group.alb_sg.id]
   subnets           = module.vpc.public_subnet_ids
 
-  enable_deletion_protection = false
+  enable_deletion_protection = true  # Enable for production
+
+  # Access logs for production
+  access_logs {
+    bucket  = aws_s3_bucket.alb_logs.bucket
+    prefix  = "alb-logs"
+    enabled = true
+  }
 
   tags = {
     Environment = var.environment
     Project     = var.project_name
+  }
+}
+
+# S3 bucket for ALB access logs
+resource "aws_s3_bucket" "alb_logs" {
+  bucket        = "${var.project_name}-${var.environment}-alb-logs-${random_id.bucket_suffix.hex}"
+  force_destroy = false  # Protect logs in production
+
+  tags = {
+    Environment = var.environment
+    Project     = var.project_name
+  }
+}
+
+resource "random_id" "bucket_suffix" {
+  byte_length = 4
+}
+
+resource "aws_s3_bucket_lifecycle_configuration" "alb_logs" {
+  bucket = aws_s3_bucket.alb_logs.id
+
+  rule {
+    id     = "log_lifecycle"
+    status = "Enabled"
+
+    expiration {
+      days = 90
+    }
+
+    noncurrent_version_expiration {
+      noncurrent_days = 30
+    }
   }
 }
 
@@ -219,13 +293,20 @@ resource "aws_lb_target_group" "app_tg" {
   health_check {
     enabled             = true
     healthy_threshold   = 2
-    interval            = 30
+    interval            = 15    # More frequent health checks for production
     matcher             = "200"
     path                = "/actuator/health"
     port                = "traffic-port"
     protocol            = "HTTP"
     timeout             = 5
-    unhealthy_threshold = 2
+    unhealthy_threshold = 3
+  }
+
+  # Stickiness for production (if needed)
+  stickiness {
+    type            = "lb_cookie"
+    cookie_duration = 86400
+    enabled         = false
   }
 
   tags = {
@@ -234,11 +315,31 @@ resource "aws_lb_target_group" "app_tg" {
   }
 }
 
-# ALB Listener
-resource "aws_lb_listener" "app_listener" {
+# ALB Listener (with HTTPS support for production)
+resource "aws_lb_listener" "app_listener_http" {
   load_balancer_arn = aws_lb.app_alb.arn
   port              = "80"
   protocol          = "HTTP"
+
+  # Redirect HTTP to HTTPS in production
+  default_action {
+    type = "redirect"
+
+    redirect {
+      port        = "443"
+      protocol    = "HTTPS"
+      status_code = "HTTP_301"
+    }
+  }
+}
+
+# HTTPS Listener (requires SSL certificate)
+resource "aws_lb_listener" "app_listener_https" {
+  load_balancer_arn = aws_lb.app_alb.arn
+  port              = "443"
+  protocol          = "HTTPS"
+  ssl_policy        = "ELBSecurityPolicy-TLS-1-2-2017-01"
+  certificate_arn   = var.ssl_certificate_arn  # You'll need to create this
 
   default_action {
     type             = "forward"
@@ -276,7 +377,7 @@ resource "kubernetes_secret" "db_secret" {
   
   metadata {
     name      = "db-secret"
-    namespace = "staging"
+    namespace = "production"
   }
 
   data = {
@@ -291,16 +392,27 @@ resource "kubernetes_secret" "db_secret" {
   type = "Opaque"
 }
 
-# Create staging namespace
-resource "kubernetes_namespace" "staging" {
+# Create production namespace
+resource "kubernetes_namespace" "production" {
   depends_on = [module.eks]
   
   metadata {
-    name = "staging"
+    name = "production"
     
     labels = {
-      environment = "staging"
+      environment = "production"
       project     = var.project_name
     }
+  }
+}
+
+# CloudWatch Log Group for Application Logs
+resource "aws_cloudwatch_log_group" "app_logs" {
+  name              = "/aws/eks/${module.eks.cluster_id}/application"
+  retention_in_days = 30
+
+  tags = {
+    Environment = var.environment
+    Project     = var.project_name
   }
 }
