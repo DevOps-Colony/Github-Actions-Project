@@ -1,14 +1,8 @@
 terraform {
-  required_version = ">= 1.4.0"
-
   required_providers {
     aws = {
       source  = "hashicorp/aws"
       version = "~> 6.0"
-    }
-    random = {
-      source  = "hashicorp/random"
-      version = "~> 3.5"
     }
   }
 }
@@ -21,19 +15,33 @@ resource "random_id" "bucket_suffix" {
   byte_length = 4
 }
 
-# S3 bucket for Terraform state
-resource "aws_s3_bucket" "tf_backend" {
-  bucket        = "tfstate-${random_id.bucket_suffix.hex}"
+resource "aws_s3_bucket" "tf_state" {
+  bucket        = "${var.project_name}-${random_id.bucket_suffix.hex}"
   force_destroy = var.force_destroy
 
-  tags = merge(var.tags, {
-    Name = "tfstate-${random_id.bucket_suffix.hex}"
-  })
+  tags = var.tags
 }
 
-# DynamoDB table for state locking
+resource "aws_s3_bucket_versioning" "versioning" {
+  bucket = aws_s3_bucket.tf_state.id
+
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
+resource "aws_s3_bucket_server_side_encryption_configuration" "encryption" {
+  bucket = aws_s3_bucket.tf_state.id
+
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
+    }
+  }
+}
+
 resource "aws_dynamodb_table" "tf_locks" {
-  name         = "tf-locks-${random_id.bucket_suffix.hex}"
+  name         = "${var.project_name}-locks"
   billing_mode = "PAY_PER_REQUEST"
   hash_key     = "LockID"
 
@@ -42,15 +50,5 @@ resource "aws_dynamodb_table" "tf_locks" {
     type = "S"
   }
 
-  tags = merge(var.tags, {
-    Name = "tf-locks-${random_id.bucket_suffix.hex}"
-  })
-}
-
-output "bucket_name" {
-  value = aws_s3_bucket.tf_backend.bucket
-}
-
-output "dynamodb_table" {
-  value = aws_dynamodb_table.tf_locks.name
+  tags = var.tags
 }
