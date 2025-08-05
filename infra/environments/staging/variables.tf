@@ -1,93 +1,75 @@
-variable "aws_region" {
-  type        = string
-  description = "AWS region to deploy resources in"
-}
-
 variable "project_name" {
+  description = "Project name"
   type        = string
-  description = "Name of the project"
 }
 
 variable "environment" {
+  description = "Environment name"
   type        = string
-  description = "Deployment environment name"
+}
+
+variable "aws_region" {
+  description = "AWS region"
+  type        = string
 }
 
 variable "vpc_cidr_block" {
+  description = "CIDR block for VPC"
   type        = string
-  description = "CIDR block for the VPC"
 }
 
 variable "public_subnet_cidrs" {
+  description = "CIDRs for public subnets"
   type        = list(string)
-  description = "List of CIDR blocks for public subnets"
 }
 
 variable "private_subnet_cidrs" {
+  description = "CIDRs for private subnets"
   type        = list(string)
-  description = "List of CIDR blocks for private subnets"
 }
 
 variable "cluster_name" {
-  type        = string
   description = "EKS Cluster name"
+  type        = string
 }
 
 variable "cluster_version" {
-  type        = string
   description = "EKS Cluster version"
+  type        = string
 }
 
 variable "node_group_name" {
+  description = "EKS Node group name"
   type        = string
-  description = "EKS node group name"
 }
 
 variable "instance_types" {
+  description = "EC2 instance types for nodes"
   type        = list(string)
-  description = "List of EC2 instance types for the EKS worker nodes"
 }
 
 variable "desired_capacity" {
+  description = "Desired node count"
   type        = number
-  description = "Desired number of worker nodes"
 }
 
 variable "min_size" {
+  description = "Minimum node count"
   type        = number
-  description = "Minimum number of worker nodes"
 }
 
 variable "max_size" {
+  description = "Maximum node count"
   type        = number
-  description = "Maximum number of worker nodes"
 }
 
 variable "alb_name" {
+  description = "Application Load Balancer name"
   type        = string
-  description = "Name of the Application Load Balancer"
 }
 
 variable "tags" {
+  description = "Tags for all resources"
   type        = map(string)
-  description = "Common tags for all resources"
-}
-
-# ✅ Added for backend automation
-variable "bucket_name" {
-  type        = string
-  description = "Name of the S3 bucket for Terraform backend"
-  default     = "github-actions-project-tfstate"
-}
-
-variable "dynamodb_table" {
-  type        = string
-  description = "Name of the DynamoDB table for Terraform state locking"
-  default     = "github-actions-project-locks"
-}
-
-variable "force_destroy" {
-  type        = bool
-  description = "Whether to force destroy the S3 bucket on deletion"
-  default     = true
+  default     = {}
 }
