@@ -11,7 +11,9 @@ variable "environment" {
 variable "aws_region" {
   description = "AWS region for backend resources"
   type        = string
+  default     = "ap-south-1"
 }
+
 
 variable "force_destroy" {
   description = "Allow bucket deletion even if it contains objects"
