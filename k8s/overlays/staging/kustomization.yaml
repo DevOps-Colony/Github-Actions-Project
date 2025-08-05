@@ -1,0 +1,23 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: staging
+
+resources:
+- ../../base
+
+patchesStrategicMerge:
+- deployment-patch.yaml
+- ingress-patch.yaml
+
+commonLabels:
+  environment: staging
+
+replicas:
+- name: bankapp
+  count: 1  # Single replica for staging
+
+images:
+- name: bankapp
+  newName: ACCOUNT_ID.dkr.ecr.us-west-2.amazonaws.com/bankapp
+  newTag: staging-latest

@@ -1,75 +1,99 @@
 variable "project_name" {
-  description = "Project name"
+  description = "Name of the project"
   type        = string
+  default     = "bankapp"
 }
 
 variable "environment" {
   description = "Environment name"
   type        = string
+  default     = "staging"
 }
 
 variable "aws_region" {
   description = "AWS region"
   type        = string
+  default     = "us-west-2"
 }
 
-variable "vpc_cidr_block" {
+# VPC Configuration
+variable "vpc_cidr" {
   description = "CIDR block for VPC"
   type        = string
+  default     = "10.1.0.0/16"  # Different CIDR for staging
 }
 
-variable "public_subnet_cidrs" {
-  description = "CIDRs for public subnets"
+variable "availability_zones" {
+  description = "Availability zones"
   type        = list(string)
+  default     = ["us-west-2a", "us-west-2b"]  # Only 2 AZs for staging
 }
 
 variable "private_subnet_cidrs" {
-  description = "CIDRs for private subnets"
+  description = "CIDR blocks for private subnets"
   type        = list(string)
+  default     = ["10.1.1.0/24", "10.1.2.0/24"]
 }
 
-variable "cluster_name" {
-  description = "EKS Cluster name"
-  type        = string
-}
-
-variable "cluster_version" {
-  description = "EKS Cluster version"
-  type        = string
-}
-
-variable "node_group_name" {
-  description = "EKS Node group name"
-  type        = string
-}
-
-variable "instance_types" {
-  description = "EC2 instance types for nodes"
+variable "public_subnet_cidrs" {
+  description = "CIDR blocks for public subnets"
   type        = list(string)
+  default     = ["10.1.101.0/24", "10.1.102.0/24"]
 }
 
-variable "desired_capacity" {
-  description = "Desired node count"
-  type        = number
-}
-
-variable "min_size" {
-  description = "Minimum node count"
-  type        = number
-}
-
-variable "max_size" {
-  description = "Maximum node count"
-  type        = number
-}
-
-variable "alb_name" {
-  description = "Application Load Balancer name"
+# EKS Configuration (smaller for staging)
+variable "eks_cluster_version" {
+  description = "EKS cluster version"
   type        = string
+  default     = "1.28"
 }
 
-variable "tags" {
-  description = "Tags for all resources"
-  type        = map(string)
-  default     = {}
+variable "eks_node_desired_capacity" {
+  description = "Desired number of nodes"
+  type        = number
+  default     = 1  # Smaller for staging
+}
+
+variable "eks_node_max_capacity" {
+  description = "Maximum number of nodes"
+  type        = number
+  default     = 2
+}
+
+variable "eks_node_min_capacity" {
+  description = "Minimum number of nodes"
+  type        = number
+  default     = 1
+}
+
+variable "eks_node_instance_types" {
+  description = "Instance types for EKS nodes"
+  type        = list(string)
+  default     = ["t3.small"]  # Smaller instances for staging
+}
+
+# RDS Configuration
+variable "rds_instance_class" {
+  description = "RDS instance class"
+  type        = string
+  default     = "db.t3.micro"
+}
+
+variable "db_name" {
+  description = "Database name"
+  type        = string
+  default     = "bankapp"
+}
+
+variable "db_username" {
+  description = "Database username"
+  type        = string
+  default     = "admin"
+}
+
+variable "db_password" {
+  description = "Database password"
+  type        = string
+  default     = "bankapp123!"
+  sensitive   = true
 }

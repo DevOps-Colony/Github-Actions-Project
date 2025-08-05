@@ -1,0 +1,19 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bankapp
+spec:
+  template:
+    spec:
+      containers:
+      - name: bankapp
+        env:
+        - name: SPRING_PROFILES_ACTIVE
+          value: "staging"
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "250m"
