@@ -1,28 +1,15 @@
-variable "project_name" {
-  description = "Base name for project resources"
+variable "bucket_name" {
+  description = "Name of the S3 bucket for Terraform state"
   type        = string
 }
 
 variable "environment" {
-  description = "Deployment environment"
+  description = "Environment name"
   type        = string
-}
-
-variable "aws_region" {
-  description = "AWS region for backend resources"
-  type        = string
-  default     = "ap-south-1"
-}
-
-
-variable "force_destroy" {
-  description = "Allow bucket deletion even if it contains objects"
-  type        = bool
-  default     = true
 }
 
 variable "tags" {
-  description = "Additional tags for resources"
+  description = "A map of tags to add to all resources"
   type        = map(string)
   default     = {}
 }
