@@ -1,5 +1,3 @@
-# infra/modules/rds/main.tf
-
 # Random password generation for RDS (if not provided)
 resource "random_password" "db_password" {
   count   = var.password == null ? 1 : 0
@@ -34,7 +32,6 @@ resource "aws_security_group" "rds" {
     security_groups = var.allowed_security_groups
   }
 
-  # Additional ingress rules for specific CIDR blocks (if provided)
   dynamic "ingress" {
     for_each = var.allowed_cidr_blocks
     content {
@@ -73,7 +70,6 @@ resource "aws_db_parameter_group" "main" {
   name        = "${var.identifier}-params"
   description = "Database parameter group for ${var.identifier}"
 
-  # Common MySQL parameters for performance
   dynamic "parameter" {
     for_each = var.parameters
     content {
@@ -89,7 +85,7 @@ resource "aws_db_parameter_group" "main" {
   }
 }
 
-# Option Group for MySQL (if needed)
+# Option Group for MySQL
 resource "aws_db_option_group" "main" {
   count                    = var.create_option_group ? 1 : 0
   name                     = "${var.identifier}-options"
@@ -123,60 +119,49 @@ resource "aws_db_option_group" "main" {
 resource "aws_db_instance" "main" {
   identifier = var.identifier
 
-  # Engine configuration
   engine         = var.engine
   engine_version = var.engine_version
   instance_class = var.instance_class
 
-  # Storage configuration
-  allocated_storage       = var.allocated_storage
-  max_allocated_storage   = var.max_allocated_storage
-  storage_type           = var.storage_type
-  storage_encrypted      = var.storage_encrypted
+  allocated_storage     = var.allocated_storage
+  max_allocated_storage = var.max_allocated_storage
+  storage_type          = var.storage_type
+  storage_encrypted     = var.storage_encrypted
   kms_key_id            = var.kms_key_id
   iops                  = var.iops
   storage_throughput    = var.storage_throughput
 
-  # Database configuration
   db_name  = var.db_name
   username = var.username
-  password = var.password != null ? var.password : random_password.db_password[0].result
+  password = var.password != null ? var.password : try(random_password.db_password[0].result, null)
   port     = var.port
 
-  # Network & Security
   vpc_security_group_ids = [aws_security_group.rds.id]
   db_subnet_group_name   = aws_db_subnet_group.main.name
   publicly_accessible    = var.publicly_accessible
 
-  # Parameter and Option Groups
-  parameter_group_name = var.create_parameter_group ? aws_db_parameter_group.main[0].name : var.parameter_group_name
-  option_group_name    = var.create_option_group ? aws_db_option_group.main[0].name : var.option_group_name
+  parameter_group_name = var.create_parameter_group ? try(aws_db_parameter_group.main[0].name, null) : var.parameter_group_name
+  option_group_name    = var.create_option_group ? try(aws_db_option_group.main[0].name, null) : var.option_group_name
 
-  # Backup configuration
-  backup_retention_period   = var.backup_retention_period
-  backup_window            = var.backup_window
-  maintenance_window       = var.maintenance_window
-  auto_minor_version_upgrade = var.auto_minor_version_upgrade
+  backup_retention_period     = var.backup_retention_period
+  backup_window               = var.backup_window
+  maintenance_window          = var.maintenance_window
+  auto_minor_version_upgrade  = var.auto_minor_version_upgrade
 
-  # High Availability
   multi_az = var.multi_az
 
-  # Monitoring
-  monitoring_interval             = var.monitoring_interval
-  monitoring_role_arn            = var.monitoring_interval > 0 ? aws_iam_role.rds_enhanced_monitoring[0].arn : null
-  performance_insights_enabled    = var.performance_insights_enabled
-  performance_insights_kms_key_id = var.performance_insights_kms_key_id
-  performance_insights_retention_period = var.performance_insights_retention_period
+  monitoring_interval          = var.monitoring_interval
+  monitoring_role_arn          = var.monitoring_interval > 0 ? try(aws_iam_role.rds_enhanced_monitoring[0].arn, null) : null
+  performance_insights_enabled = var.performance_insights_enabled
+  performance_insights_kms_key_id        = var.performance_insights_kms_key_id
+  performance_insights_retention_period  = var.performance_insights_retention_period
 
-  # Logging
   enabled_cloudwatch_logs_exports = var.enabled_cloudwatch_logs_exports
 
-  # Deletion protection
-  deletion_protection = var.deletion_protection
-  skip_final_snapshot = var.skip_final_snapshot
+  deletion_protection     = var.deletion_protection
+  skip_final_snapshot     = var.skip_final_snapshot
   final_snapshot_identifier = var.skip_final_snapshot ? null : "${var.identifier}-final-snapshot-${formatdate("YYYY-MM-DD-hhmm", timestamp())}"
 
-  # Copy tags to snapshots
   copy_tags_to_snapshot = var.copy_tags_to_snapshot
 
   tags = merge(
@@ -192,7 +177,7 @@ resource "aws_db_instance" "main" {
   ]
 }
 
-# Enhanced Monitoring Role (if monitoring is enabled)
+# Enhanced Monitoring Role
 resource "aws_iam_role" "rds_enhanced_monitoring" {
   count = var.monitoring_interval > 0 ? 1 : 0
   name  = "${var.identifier}-rds-monitoring-role"
@@ -215,11 +200,11 @@ resource "aws_iam_role" "rds_enhanced_monitoring" {
 
 resource "aws_iam_role_policy_attachment" "rds_enhanced_monitoring" {
   count      = var.monitoring_interval > 0 ? 1 : 0
-  role       = aws_iam_role.rds_enhanced_monitoring[0].name
+  role       = try(aws_iam_role.rds_enhanced_monitoring[0].name, null)
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole"
 }
 
-# CloudWatch Log Groups (if logging is enabled)
+# CloudWatch Log Groups
 resource "aws_cloudwatch_log_group" "this" {
   for_each = toset([for log_type in var.enabled_cloudwatch_logs_exports : "/aws/rds/instance/${var.identifier}/${log_type}"])
 
@@ -230,7 +215,7 @@ resource "aws_cloudwatch_log_group" "this" {
   tags = var.tags
 }
 
-# AWS Secrets Manager Secret for Database Credentials (Optional)
+# AWS Secrets Manager Secret
 resource "aws_secretsmanager_secret" "db_credentials" {
   count                   = var.create_secrets_manager_secret ? 1 : 0
   name                    = "${var.identifier}-credentials"
@@ -242,10 +227,10 @@ resource "aws_secretsmanager_secret" "db_credentials" {
 
 resource "aws_secretsmanager_secret_version" "db_credentials" {
   count     = var.create_secrets_manager_secret ? 1 : 0
-  secret_id = aws_secretsmanager_secret.db_credentials[0].id
+  secret_id = try(aws_secretsmanager_secret.db_credentials[0].id, null)
   secret_string = jsonencode({
     username = var.username
-    password = var.password != null ? var.password : random_password.db_password[0].result
+    password = var.password != null ? var.password : try(random_password.db_password[0].result, null)
     engine   = var.engine
     host     = aws_db_instance.main.endpoint
     port     = var.port
@@ -253,36 +238,28 @@ resource "aws_secretsmanager_secret_version" "db_credentials" {
   })
 }
 
-# Read Replica (Optional)
+# Read Replica
 resource "aws_db_instance" "read_replica" {
   count = var.create_read_replica ? 1 : 0
 
-  identifier = "${var.identifier}-read-replica"
-
-  # Read replica configuration
+  identifier          = "${var.identifier}-read-replica"
   replicate_source_db = aws_db_instance.main.identifier
   instance_class      = var.read_replica_instance_class != null ? var.read_replica_instance_class : var.instance_class
 
-  # Storage (inherited from source for read replicas)
   storage_encrypted = var.storage_encrypted
 
-  # Network & Security
   vpc_security_group_ids = [aws_security_group.rds.id]
   publicly_accessible    = var.publicly_accessible
 
-  # Monitoring
-  monitoring_interval  = var.monitoring_interval
-  monitoring_role_arn = var.monitoring_interval > 0 ? aws_iam_role.rds_enhanced_monitoring[0].arn : null
+  monitoring_interval = var.monitoring_interval
+  monitoring_role_arn = var.monitoring_interval > 0 ? try(aws_iam_role.rds_enhanced_monitoring[0].arn, null) : null
 
-  # Backup (read replicas can have different backup settings)
-  backup_retention_period = 0  # Read replicas don't need backups
-  skip_final_snapshot    = var.skip_final_snapshot
+  backup_retention_period = 0
+  skip_final_snapshot     = var.skip_final_snapshot
 
-  # Performance Insights
   performance_insights_enabled    = var.performance_insights_enabled
   performance_insights_kms_key_id = var.performance_insights_kms_key_id
 
-  # Auto minor version upgrade
   auto_minor_version_upgrade = var.auto_minor_version_upgrade
 
   tags = merge(
