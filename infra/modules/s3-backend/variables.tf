@@ -1,19 +1,17 @@
-variable "bucket_name" {
+variable "aws_region" {
+  description = "AWS region for the backend bucket"
   type        = string
-  description = "The name of the S3 bucket for Terraform backend state"
-}
-
-variable "dynamodb_table" {
-  type        = string
-  description = "The name of the DynamoDB table for Terraform state locking"
+  default     = "ap-south-1"
 }
 
 variable "force_destroy" {
+  description = "Whether to force destroy the S3 bucket"
   type        = bool
-  description = "Boolean that indicates all objects should be deleted from the bucket so that the bucket can be destroyed without error"
+  default     = true
 }
 
 variable "tags" {
+  description = "Tags for resources"
   type        = map(string)
-  description = "Tags to apply to the resources"
+  default     = {}
 }

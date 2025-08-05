@@ -24,20 +24,31 @@ jobs:
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
 
-      - name: Create Backend Bucket & Table (One-time)
+      # Step 1: Create Backend S3 & DynamoDB (with random prefix)
+      - name: Create Backend Bucket & Table
+        id: backend
         working-directory: ./infra/modules/s3-backend
         run: |
           terraform init
           terraform apply -auto-approve
+          # Capture outputs to env
+          echo "TF_BUCKET_NAME=$(terraform output -raw bucket_name)" >> $GITHUB_ENV
+          echo "TF_DYNAMODB_TABLE=$(terraform output -raw dynamodb_table)" >> $GITHUB_ENV
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           AWS_REGION: ${{ env.AWS_REGION }}
 
+      # Step 2: Deploy full infrastructure using generated backend bucket
       - name: Deploy Infrastructure (VPC, EKS, ALB, etc.)
         working-directory: ./infra/environments/staging
         run: |
-          terraform init
+          terraform init \
+            -backend-config="bucket=${TF_BUCKET_NAME}" \
+            -backend-config="key=staging/terraform.tfstate" \
+            -backend-config="region=${AWS_REGION}" \
+            -backend-config="dynamodb_table=${TF_DYNAMODB_TABLE}" \
+            -backend-config="encrypt=true"
           terraform apply -auto-approve
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
