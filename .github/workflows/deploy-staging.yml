@@ -42,7 +42,7 @@ jobs:
     - name: Make mvnw executable
       run: chmod +x mvnw
     - name: Run tests
-      run: sh mvnw clean package -DskipTests
+      run: ./mvnw clean package -DskipTests
 
     - name: SonarCloud Scan
       uses: SonarSource/sonarcloud-github-action@master
