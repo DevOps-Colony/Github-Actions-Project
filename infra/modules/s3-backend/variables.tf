@@ -1,17 +1,21 @@
-variable "aws_region" {
-  description = "AWS region for the backend bucket"
+variable "project_name" {
+  description = "Project name prefix for the S3 bucket and DynamoDB table"
   type        = string
-  default     = "ap-south-1"
+}
+
+variable "aws_region" {
+  description = "AWS region to deploy the backend resources"
+  type        = string
 }
 
 variable "force_destroy" {
-  description = "Whether to force destroy the S3 bucket"
+  description = "Whether to force destroy the S3 bucket (delete all objects)"
   type        = bool
-  default     = true
+  default     = false
 }
 
 variable "tags" {
-  description = "Tags for resources"
+  description = "Tags to apply to all resources"
   type        = map(string)
   default     = {}
 }
