@@ -111,25 +111,29 @@ jobs:
     - name: Terraform Init
       run: terraform init
 
+
+
     - name: Check & force unlock stale Terraform lock
       if: always()
       run: |
         LOCK_TABLE_NAME="terraform-state-lock-${{ needs.determine-environment.outputs.environment }}"
         echo "Checking for stale Terraform locks in DynamoDB table: $LOCK_TABLE_NAME..."
         
-        LOCK_ID=$(aws dynamodb scan \
+        # Scan the table for any lock
+        ITEM=$(aws dynamodb scan \
           --table-name "$LOCK_TABLE_NAME" \
           --region ${{ env.AWS_REGION }} \
-          --query "Items[].LockID.S" \
-          --output text)
-        
-        if [ -n "$LOCK_ID" ]; then
-          echo "Found lock ID: $LOCK_ID — forcing unlock..."
-          terraform force-unlock -force "$LOCK_ID" || true
+          --query "Items" \
+          --output json)
+
+        if [ "$ITEM" != "[]" ]; then
+          # Extract the actual lock UUID from the Info JSON
+          LOCK_UUID=$(echo "$ITEM" | jq -r '.[0].Info.S | fromjson | .ID')
+          echo "Found lock UUID: $LOCK_UUID — forcing unlock..."
+          terraform force-unlock -force "$LOCK_UUID" || true
         else
           echo "No lock found, continuing..."
         fi
-
 
 
     - name: Terraform Plan
