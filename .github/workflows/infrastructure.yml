@@ -101,7 +101,13 @@ jobs:
 
     - name: Get Stage 1 Outputs
       id: outputs
+      working-directory: ./infra/stage-1-aws
       run: |
+        terraform init -reconfigure \
+          -backend-config="bucket=bankapp-terraform-state-2024" \
+          -backend-config="key=stage-1/terraform.tfstate" \
+          -backend-config="region=${{ env.AWS_REGION }}" \
+          -backend-config="dynamodb_table=terraform-state-lock"
         echo "cluster_name=$(terraform output -raw eks_cluster_id)" >> $GITHUB_OUTPUT
         echo "ecr_repository_url=$(terraform output -raw ecr_repository_url)" >> $GITHUB_OUTPUT
         echo "load_balancer_dns=$(terraform output -raw load_balancer_dns)" >> $GITHUB_OUTPUT
