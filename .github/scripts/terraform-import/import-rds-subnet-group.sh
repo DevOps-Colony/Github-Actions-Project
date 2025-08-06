@@ -3,15 +3,16 @@ set -e
 
 SUBNET_GROUP_NAME="$1"
 RESOURCE_ADDRESS="$2"
+WORK_DIR="$3"
 
-# Check if subnet group exists in AWS
+cd "$WORK_DIR"
+
 if aws rds describe-db-subnet-groups \
     --db-subnet-group-name "$SUBNET_GROUP_NAME" \
     --region "$AWS_REGION" >/dev/null 2>&1; then
     
     echo "RDS Subnet Group '$SUBNET_GROUP_NAME' exists in AWS."
     
-    # Import only if not already in Terraform state
     if ! terraform state list | grep -q "$RESOURCE_ADDRESS"; then
         echo "Importing $RESOURCE_ADDRESS..."
         terraform import "$RESOURCE_ADDRESS" "$SUBNET_GROUP_NAME"
