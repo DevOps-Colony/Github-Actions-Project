@@ -25,7 +25,12 @@ resource "aws_lb_target_group" "tg" {
     healthy_threshold   = 5
     unhealthy_threshold = 2
   }
+
+  lifecycle {
+    prevent_destroy = true
+  }
 }
+
 
 resource "aws_lb_listener" "listener" {
   load_balancer_arn = aws_lb.app.arn
