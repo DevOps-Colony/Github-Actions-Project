@@ -74,7 +74,7 @@ jobs:
             -backend-config="dynamodb_table=terraform-state-lock-${{ needs.determine-environment.outputs.environment }}"
 
       - name: Import existing ECR repo
-        run: bash ../../.github/scripts/terraform-import/import-ecr.sh "bankapp-${{ needs.determine-environment.outputs.environment }}" "${{ env.AWS_REGION }}" "./infra/stage-1-aws"
+        run: bash ../../.github/scripts/terraform-import/import-ecr.sh "bankapp-${{ needs.determine-environment.outputs.environment }}" "${{ env.AWS_REGION }}"
 
       - name: Import ALB Target Group
         run: bash ../../.github/scripts/terraform-import/import-tg.sh "bankapp-${{ needs.determine-environment.outputs.environment }}-tg" "${{ env.AWS_REGION }}" "./infra/stage-1-aws"
