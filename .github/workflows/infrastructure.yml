@@ -133,21 +133,25 @@ jobs:
     - name: Check & force unlock state Terraform lock
       if: always()
       run: |
-        LOCK_TABLE_NAME="terraform-state-lock"
+        LOCK_TABLE_NAME="terraform-state-lock-${{ needs.determine-environment.outputs.environment }}"
         echo "Checking for stale Terraform locks in DynamoDB table: $LOCK_TABLE_NAME..."
-        
-        ITEM=$(aws dynamodb scan \
-          --table-name "$LOCK_TABLE_NAME" \
-          --region ${{ env.AWS_REGION }} \
-          --query "Items" \
-          --output json)
 
-        if [ "$ITEM" != "[]" ]; then
-          LOCK_UUID=$(echo "$ITEM" | jq -r '.[0].Info.S | fromjson | .ID')
-          echo "Found lock UUID: $LOCK_UUID — forcing unlock..."
-          terraform force-unlock -force "$LOCK_UUID" || true
+        if aws dynamodb describe-table --table-name "$LOCK_TABLE_NAME" --region ${{ env.AWS_REGION }} >/dev/null 2>&1; then
+          ITEM=$(aws dynamodb scan \
+            --table-name "$LOCK_TABLE_NAME" \
+            --region ${{ env.AWS_REGION }} \
+            --query "Items" \
+            --output json)
+
+          if [ "$ITEM" != "[]" ]; then
+            LOCK_UUID=$(echo "$ITEM" | jq -r '.[0].Info.S | fromjson | .ID')
+            echo "Found lock UUID: $LOCK_UUID — forcing unlock..."
+            terraform force-unlock -force "$LOCK_UUID" || true
+          else
+            echo "No lock found, continuing..."
+          fi
         else
-          echo "No lock found, continuing..."
+          echo "Lock table does not exist yet. Skipping unlock check."
         fi
 
     - name: Terraform Plan (Stage 1)
