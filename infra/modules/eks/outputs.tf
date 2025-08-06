@@ -14,8 +14,13 @@ output "cluster_endpoint" {
 }
 
 output "cluster_security_group_id" {
-  description = "Security group ids attached to the cluster control plane"
+  description = "Security group ID attached to the EKS cluster"
   value       = aws_eks_cluster.cluster.vpc_config[0].cluster_security_group_id
+}
+
+output "node_security_group_id" {
+  description = "Security group ID attached to the EKS nodes"
+  value       = aws_security_group.node_sg.id
 }
 
 output "cluster_certificate_authority_data" {
@@ -28,17 +33,17 @@ output "cluster_version" {
   value       = aws_eks_cluster.cluster.version
 }
 
-output "node_security_group_id" {
-  description = "ID of the node shared security group"
-  value       = aws_security_group.node_sg.id
-}
-
 output "oidc_provider_arn" {
-  description = "The ARN of the OIDC Provider if enabled"
-  value       = aws_iam_openid_connect_provider.cluster_oidc.arn
+  description = "The ARN of the OIDC Provider for the EKS cluster"
+  value       = aws_iam_openid_connect_provider.cluster.arn
 }
 
-output "aws_lbc_role_arn" {
-  description = "The ARN of the AWS Load Balancer Controller IAM role"
-  value       = aws_iam_role.aws_lbc_role.arn
+output "cluster_iam_role_arn" {
+  description = "IAM role ARN of the EKS cluster"
+  value       = aws_iam_role.cluster.arn
+}
+
+output "node_group_iam_role_arn" {
+  description = "IAM role ARN of the EKS node group"
+  value       = aws_iam_role.node_group.arn
 }
