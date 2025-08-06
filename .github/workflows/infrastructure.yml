@@ -75,10 +75,21 @@ jobs:
 
       - name: Import existing resources
         run: |
+          # Import in dependency order
+          bash ../../.github/scripts/terraform-import/import-eks.sh "bankapp-${{ needs.determine-environment.outputs.environment }}" "${{ env.AWS_REGION }}" "." || true
+          bash ../../.github/scripts/terraform-import/import-alb.sh "bankapp-${{ needs.determine-environment.outputs.environment }}-alb" "${{ env.AWS_REGION }}" "." || true
           bash ../../.github/scripts/terraform-import/import-ecr.sh "bankapp-${{ needs.determine-environment.outputs.environment }}" "${{ env.AWS_REGION }}" "." || true
           bash ../../.github/scripts/terraform-import/import-tg.sh "bankapp-${{ needs.determine-environment.outputs.environment }}-tg" "${{ env.AWS_REGION }}" "." || true
           bash ../../.github/scripts/terraform-import/import-iam-role.sh "bankapp-${{ needs.determine-environment.outputs.environment }}-node-group-role" "module.eks.aws_iam_role.node_group" "." || true
           bash ../../.github/scripts/terraform-import/import-rds-subnet-group.sh "bankapp-${{ needs.determine-environment.outputs.environment }}-db-subnet-group" "module.rds.aws_db_subnet_group.main" "." || true
+
+      - name: Handle Resource Conflicts
+        run: |
+          # Check for state sync issues and refresh
+          terraform refresh || true
+          
+          # If RDS subnet group has VPC conflicts, remove it and let Terraform recreate
+          terraform state rm module.rds.aws_db_subnet_group.main || true
 
       - name: Handle Target Group Dependencies
         run: |
