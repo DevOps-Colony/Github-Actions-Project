@@ -33,7 +33,6 @@ jobs:
             echo "environment=production" >> $GITHUB_OUTPUT
           else
             echo "environment=staging" >> $GITHUB_OUTPUT
-          fi
 
   stage-1-aws-infrastructure:
     name: Deploy AWS Infrastructure (Stage 1)
@@ -75,40 +74,41 @@ jobs:
             -backend-config="region=${{ env.AWS_REGION }}" \
             -backend-config="dynamodb_table=terraform-state-lock-${{ needs.determine-environment.outputs.environment }}"
 
-      # Import ECR repo
+      # Import existing AWS resources before plan
       - name: Import existing ECR repo
-        run: bash ../../.github/scripts/terraform-import/import-ecr.sh \
-          "bankapp-${{ needs.determine-environment.outputs.environment }}" \
-          "${{ env.AWS_REGION }}" \
-          "./infra/stage-1-aws"
+        run: |
+          bash ../../.github/scripts/terraform-import/import-ecr.sh \
+            "bankapp-${{ needs.determine-environment.outputs.environment }}" \
+            "${{ env.AWS_REGION }}" \
+            "./infra/stage-1-aws" || true
 
-      # Import ALB Target Group
       - name: Import ALB Target Group
-        run: bash ../../.github/scripts/terraform-import/import-tg.sh \
-          "bankapp-${{ needs.determine-environment.outputs.environment }}-tg" \
-          "${{ env.AWS_REGION }}" \
-          "./infra/stage-1-aws"
+        run: |
+          bash ../../.github/scripts/terraform-import/import-tg.sh \
+            "bankapp-${{ needs.determine-environment.outputs.environment }}-tg" \
+            "${{ env.AWS_REGION }}" \
+            "./infra/stage-1-aws" || true
 
-      # Import IAM Role
       - name: Import IAM Role
-        run: bash ../../.github/scripts/terraform-import/import-iam-role.sh \
-          "bankapp-${{ needs.determine-environment.outputs.environment }}-node-group-role" \
-          "module.eks.aws_iam_role.node_group" \
-          "./infra/stage-1-aws"
+        run: |
+          bash ../../.github/scripts/terraform-import/import-iam-role.sh \
+            "bankapp-${{ needs.determine-environment.outputs.environment }}-node-group-role" \
+            "module.eks.aws_iam_role.node_group" \
+            "./infra/stage-1-aws" || true
 
-      # Import RDS Subnet Group
       - name: Import RDS Subnet Group
-        run: bash ../../.github/scripts/terraform-import/import-rds-subnet-group.sh \
-          "bankapp-${{ needs.determine-environment.outputs.environment }}-db-subnet-group" \
-          "module.rds.aws_db_subnet_group.main" \
-          "./infra/stage-1-aws"
+        run: |
+          bash ../../.github/scripts/terraform-import/import-rds-subnet-group.sh \
+            "bankapp-${{ needs.determine-environment.outputs.environment }}-db-subnet-group" \
+            "module.rds.aws_db_subnet_group.main" \
+            "./infra/stage-1-aws" || true
 
-      # Force unlock Terraform state
       - name: Force unlock Terraform state
         if: always()
-        run: bash ../../.github/scripts/terraform-import/force-unlock.sh \
-          "terraform-state-lock-${{ needs.determine-environment.outputs.environment }}" \
-          "${{ env.AWS_REGION }}"
+        run: |
+          bash ../../.github/scripts/terraform-import/force-unlock.sh \
+            "terraform-state-lock-${{ needs.determine-environment.outputs.environment }}" \
+            "${{ env.AWS_REGION }}" || true
 
       - id: plan
         run: terraform plan -out=tfplan
