@@ -2,23 +2,18 @@
 set -e
 
 SUBNET_GROUP_NAME="$1"
-RESOURCE_ADDRESS="$2"
-WORK_DIR="$3"
+RESOURCE_NAME="$2"
 
-cd "$WORK_DIR"
+echo "🔍 Checking if RDS Subnet Group '$SUBNET_GROUP_NAME' exists..."
 
-if aws rds describe-db-subnet-groups \
-    --db-subnet-group-name "$SUBNET_GROUP_NAME" \
-    --region "$AWS_REGION" >/dev/null 2>&1; then
-    
-    echo "✅ RDS Subnet Group '$SUBNET_GROUP_NAME' exists in AWS."
-    
-    if ! terraform state list | grep -q "$RESOURCE_ADDRESS"; then
-        echo "📥 Importing $RESOURCE_ADDRESS..."
-        terraform import "$RESOURCE_ADDRESS" "$SUBNET_GROUP_NAME"
-    else
-        echo "ℹ️ $RESOURCE_ADDRESS already in Terraform state. Skipping import."
-    fi
+if aws rds describe-db-subnet-groups --db-subnet-group-name "$SUBNET_GROUP_NAME" >/dev/null 2>&1; then
+  echo "✅ RDS Subnet Group '$SUBNET_GROUP_NAME' exists."
+  if ! terraform state list | grep -q "$RESOURCE_NAME"; then
+    echo "📥 Importing RDS Subnet Group into Terraform state..."
+    terraform import "$RESOURCE_NAME" "$SUBNET_GROUP_NAME"
+  else
+    echo "⚠️ RDS Subnet Group already in Terraform state. Skipping import."
+  fi
 else
-    echo "⚠️ RDS Subnet Group '$SUBNET_GROUP_NAME' not found in AWS. Terraform will create it."
+  echo "ℹ️ RDS Subnet Group '$SUBNET_GROUP_NAME' does not exist. Terraform will create it."
 fi
