@@ -12,89 +12,78 @@ fi
 
 cd "$TERRAFORM_DIR"
 
-echo "🔄 Importing AWS resources for bankapp-$ENVIRONMENT in $AWS_REGION"
+import_resource() {
+    local terraform_address=$1
+    local resource_id=$2
+    local description=$3
 
-# Utility: import if not in state
-import_if_missing() {
-    local tf_address=$1
-    local aws_id=$2
-    local desc=$3
+    if terraform state list | grep -q "$terraform_address"; then
+        echo "✅ $description already in Terraform state, skipping import."
+        return
+    fi
 
-    if terraform state list | grep -q "$tf_address"; then
-        echo "✅ $desc already in Terraform state"
-    elif [ -n "$aws_id" ] && [ "$aws_id" != "None" ] && [ "$aws_id" != "null" ]; then
-        echo "📦 Importing $desc ($aws_id)"
-        terraform import "$tf_address" "$aws_id" || true
+    if [ -n "$resource_id" ] && [ "$resource_id" != "None" ] && [ "$resource_id" != "null" ]; then
+        echo "📦 Importing $description: $resource_id"
+        terraform import "$terraform_address" "$resource_id" || true
     else
-        echo "⏭️ Skipping $desc - not found"
+        echo "⏭️  Skipping $description - not found"
     fi
 }
 
-# --- VPC ---
-VPC_ID=$(aws ec2 describe-vpcs \
-  --filters "Name=tag:Name,Values=bankapp-$ENVIRONMENT" \
-  --region "$AWS_REGION" --query 'Vpcs[0].VpcId' --output text 2>/dev/null || echo "")
-import_if_missing "module.vpc.aws_vpc.main" "$VPC_ID" "VPC"
-
-# --- Public Subnets ---
-PUB_SUBNETS=$(aws ec2 describe-subnets \
-  --filters "Name=tag:Name,Values=bankapp-$ENVIRONMENT-public-*" \
-  --region "$AWS_REGION" --query 'Subnets[].SubnetId' --output text)
-i=0
-for subnet in $PUB_SUBNETS; do
-  import_if_missing "module.vpc.aws_subnet.public[$i]" "$subnet" "Public Subnet $i"
-  i=$((i+1))
-done
-
-# --- Private Subnets ---
-PRIV_SUBNETS=$(aws ec2 describe-subnets \
-  --filters "Name=tag:Name,Values=bankapp-$ENVIRONMENT-private-*" \
-  --region "$AWS_REGION" --query 'Subnets[].SubnetId' --output text)
-i=0
-for subnet in $PRIV_SUBNETS; do
-  import_if_missing "module.vpc.aws_subnet.private[$i]" "$subnet" "Private Subnet $i"
-  i=$((i+1))
-done
-
-# --- EKS Cluster ---
-import_if_missing "module.eks.aws_eks_cluster.cluster" "bankapp-$ENVIRONMENT" "EKS Cluster"
-
-# --- Node Group Role ---
-import_if_missing "module.eks.aws_iam_role.node_group" "bankapp-$ENVIRONMENT-node-group-role" "EKS Node Group Role"
-
-# --- Node Groups ---
-NODE_GROUPS=$(aws eks list-nodegroups --cluster-name "bankapp-$ENVIRONMENT" --region "$AWS_REGION" --query 'nodegroups' --output text)
-for ng in $NODE_GROUPS; do
-  import_if_missing "module.eks.aws_eks_node_group.node_groups[\"$ng\"]" "bankapp-$ENVIRONMENT:$ng" "EKS Node Group $ng"
-done
-
-# --- ALB Security Group ---
-ALB_SG_ID=$(aws ec2 describe-security-groups \
-  --filters "Name=group-name,Values=bankapp-$ENVIRONMENT-alb-sg" \
-  --region "$AWS_REGION" --query 'SecurityGroups[0].GroupId' --output text)
-import_if_missing "aws_security_group.alb_sg" "$ALB_SG_ID" "ALB Security Group"
-
-# --- ALB ---
-ALB_ARN=$(aws elbv2 describe-load-balancers --names "bankapp-$ENVIRONMENT-alb" --region "$AWS_REGION" --query 'LoadBalancers[0].LoadBalancerArn' --output text)
-import_if_missing "aws_lb.app_alb" "$ALB_ARN" "Application Load Balancer"
-
-# --- Target Group ---
-TG_ARN=$(aws elbv2 describe-target-groups --names "bankapp-$ENVIRONMENT-tg" --region "$AWS_REGION" --query 'TargetGroups[0].TargetGroupArn' --output text)
-import_if_missing "aws_lb_target_group.app_tg" "$TG_ARN" "Target Group"
-
-# --- Listener ---
-if [ "$ALB_ARN" != "None" ] && [ "$ALB_ARN" != "null" ]; then
-  LISTENER_ARN=$(aws elbv2 describe-listeners --load-balancer-arn "$ALB_ARN" --region "$AWS_REGION" --query 'Listeners[0].ListenerArn' --output text)
-  import_if_missing "aws_lb_listener.app_listener" "$LISTENER_ARN" "ALB Listener"
+# --- EKS Cluster
+if aws eks describe-cluster --name "bankapp-$ENVIRONMENT" --region "$AWS_REGION" >/dev/null 2>&1; then
+    import_resource "module.eks.aws_eks_cluster.cluster" "bankapp-$ENVIRONMENT" "EKS Cluster"
 fi
 
-# --- ECR Repository ---
-import_if_missing "aws_ecr_repository.app_repo" "bankapp-$ENVIRONMENT" "ECR Repository"
+# --- EKS Node Groups
+NODE_GROUPS=$(aws eks list-nodegroups --cluster-name "bankapp-$ENVIRONMENT" --region "$AWS_REGION" --query 'nodegroups' --output text)
+for nodegroup in $NODE_GROUPS; do
+    import_resource "module.eks.aws_eks_node_group.node_groups[\"$nodegroup\"]" "bankapp-$ENVIRONMENT:$nodegroup" "EKS Node Group: $nodegroup"
+done
 
-# --- RDS Subnet Group ---
-import_if_missing "module.rds.aws_db_subnet_group.main" "bankapp-$ENVIRONMENT-db-subnet-group" "RDS Subnet Group"
+# --- ALB + Security Group
+ALB_ARN=$(aws elbv2 describe-load-balancers --names "bankapp-$ENVIRONMENT-alb" --region "$AWS_REGION" --query 'LoadBalancers[0].LoadBalancerArn' --output text)
+if [ "$ALB_ARN" != "None" ]; then
+    import_resource "aws_lb.app_alb" "$ALB_ARN" "Application Load Balancer"
 
-# --- RDS Instance ---
-import_if_missing "module.rds.aws_db_instance.main" "bankapp-$ENVIRONMENT-db" "RDS Instance"
+    # Import ALB SG
+    ALB_SG=$(aws elbv2 describe-load-balancers --load-balancer-arns "$ALB_ARN" --region "$AWS_REGION" --query 'LoadBalancers[0].SecurityGroups[0]' --output text)
+    import_resource "aws_security_group.alb_sg" "$ALB_SG" "ALB Security Group"
+fi
 
-echo "✅ Import completed for $ENVIRONMENT"
+# --- Target Group
+TG_ARN=$(aws elbv2 describe-target-groups --names "bankapp-$ENVIRONMENT-tg" --region "$AWS_REGION" --query 'TargetGroups[0].TargetGroupArn' --output text)
+import_resource "aws_lb_target_group.app_tg" "$TG_ARN" "Target Group"
+
+# --- ALB Listener
+LISTENER_ARN=$(aws elbv2 describe-listeners --load-balancer-arn "$ALB_ARN" --region "$AWS_REGION" --query 'Listeners[0].ListenerArn' --output text)
+import_resource "aws_lb_listener.app_listener" "$LISTENER_ARN" "ALB Listener"
+
+# --- RDS Subnet Group + Subnets
+if aws rds describe-db-subnet-groups --db-subnet-group-name "bankapp-$ENVIRONMENT-db-subnet-group" --region "$AWS_REGION" >/dev/null 2>&1; then
+    import_resource "module.rds.aws_db_subnet_group.main" "bankapp-$ENVIRONMENT-db-subnet-group" "RDS Subnet Group"
+
+    # Get VPC ID from the subnet group and import
+    VPC_ID=$(aws rds describe-db-subnet-groups --db-subnet-group-name "bankapp-$ENVIRONMENT-db-subnet-group" --region "$AWS_REGION" --query 'DBSubnetGroups[0].VpcId' --output text)
+    import_resource "module.vpc.aws_vpc.main" "$VPC_ID" "VPC for RDS"
+
+    # Import each subnet
+    SUBNET_IDS=$(aws rds describe-db-subnet-groups --db-subnet-group-name "bankapp-$ENVIRONMENT-db-subnet-group" --region "$AWS_REGION" --query 'DBSubnetGroups[0].Subnets[*].SubnetIdentifier' --output text)
+    INDEX=0
+    for subnet in $SUBNET_IDS; do
+        import_resource "module.vpc.aws_subnet.private[$INDEX]" "$subnet" "Private Subnet $INDEX"
+        INDEX=$((INDEX+1))
+    done
+fi
+
+# --- RDS Instance
+if aws rds describe-db-instances --db-instance-identifier "bankapp-$ENVIRONMENT-db" --region "$AWS_REGION" >/dev/null 2>&1; then
+    import_resource "module.rds.aws_db_instance.main" "bankapp-$ENVIRONMENT-db" "RDS Instance"
+fi
+
+# --- ECR Repository
+if aws ecr describe-repositories --repository-names "bankapp-$ENVIRONMENT" --region "$AWS_REGION" >/dev/null 2>&1; then
+    import_resource "aws_ecr_repository.app_repo" "bankapp-$ENVIRONMENT" "ECR Repository"
+fi
+
+echo "✅ Import process completed for environment: $ENVIRONMENT"

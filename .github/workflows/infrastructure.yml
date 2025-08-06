@@ -75,7 +75,7 @@ jobs:
             -backend-config="region=${{ env.AWS_REGION }}" \
             -backend-config="dynamodb_table=terraform-state-lock-${{ needs.determine-environment.outputs.environment }}"
 
-      - name: Import all existing resources
+      - name: Import existing AWS resources
         run: |
           chmod +x ../../.github/scripts/terraform-import/import-all-resources.sh
           ../../.github/scripts/terraform-import/import-all-resources.sh \
@@ -83,10 +83,11 @@ jobs:
             "${{ env.AWS_REGION }}" \
             "."
 
-      - name: Terraform Plan & Apply
-        run: |
-          terraform plan -out=tfplan
-          terraform apply -auto-approve tfplan
+      - id: plan
+        run: terraform plan -out=tfplan
+
+      - if: steps.plan.outcome == 'success'
+        run: terraform apply -auto-approve tfplan
 
       - id: get-outputs
         run: |
