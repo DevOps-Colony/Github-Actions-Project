@@ -12,9 +12,7 @@ on:
         required: true
         default: 'staging'
         type: choice
-        options:
-        - staging
-        - production
+        options: [ staging, production ]
 
 env:
   AWS_REGION: us-west-2
@@ -26,16 +24,16 @@ jobs:
     outputs:
       environment: ${{ steps.set-env.outputs.environment }}
     steps:
-    - name: Determine environment
-      id: set-env
-      run: |
-        if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
-          echo "environment=${{ github.event.inputs.environment }}" >> $GITHUB_OUTPUT
-        elif [ "${{ github.ref }}" == "refs/heads/main" ]; then
-          echo "environment=production" >> $GITHUB_OUTPUT
-        else
-          echo "environment=staging" >> $GITHUB_OUTPUT
-        fi
+      - name: Determine environment
+        id: set-env
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            echo "environment=${{ github.event.inputs.environment }}" >> $GITHUB_OUTPUT
+          elif [ "${{ github.ref }}" == "refs/heads/main" ]; then
+            echo "environment=production" >> $GITHUB_OUTPUT
+          else
+            echo "environment=staging" >> $GITHUB_OUTPUT
+          fi
 
   stage-1-aws-infrastructure:
     name: Deploy AWS Infrastructure (Stage 1)
@@ -54,113 +52,58 @@ jobs:
       oidc-provider-arn: ${{ steps.get-outputs.outputs.oidc_provider_arn }}
       target-group-arn: ${{ steps.get-outputs.outputs.target_group_arn }}
       rds-endpoint: ${{ steps.get-outputs.outputs.rds_endpoint }}
-      environment: ${{ needs.determine-environment.outputs.environment }}
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
 
-    - name: Setup Terraform
-      uses: hashicorp/setup-terraform@v3
-      with:
-        terraform_version: ${{ env.TF_VERSION }}
-        terraform_wrapper: false
+      - name: Terraform Init
+        run: |
+          terraform init \
+            -backend-config="bucket=bankapp-terraform-state-2024" \
+            -backend-config="key=stage-1-${{ needs.determine-environment.outputs.environment }}/terraform.tfstate" \
+            -backend-config="region=${{ env.AWS_REGION }}" \
+            -backend-config="dynamodb_table=terraform-state-lock-${{ needs.determine-environment.outputs.environment }}"
 
-    - name: Configure AWS credentials
-      uses: aws-actions/configure-aws-credentials@v4
-      with:
-        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        aws-region: ${{ env.AWS_REGION }}
+      - name: Import existing ECR repo
+        run: bash ../../.github/scripts/terraform-import/import-ecr.sh "bankapp-${{ needs.determine-environment.outputs.environment }}" "${{ env.AWS_REGION }}" "./infra/stage-1-aws"
 
-    - name: Terraform Init (Stage 1)
-      run: |
-        terraform init \
-          -backend-config="bucket=bankapp-terraform-state-2024" \
-          -backend-config="key=stage-1-${{ needs.determine-environment.outputs.environment }}/terraform.tfstate" \
-          -backend-config="region=${{ env.AWS_REGION }}" \
-          -backend-config="dynamodb_table=terraform-state-lock-${{ needs.determine-environment.outputs.environment }}"
+      - name: Import ALB Target Group
+        run: bash ../../.github/scripts/terraform-import/import-tg.sh "bankapp-${{ needs.determine-environment.outputs.environment }}-tg" "${{ env.AWS_REGION }}" "./infra/stage-1-aws"
 
-    # Script for ECR import
-    - name: Import existing ECR repo if it exists
-      run: |
-        if [ -f "../../.github/scripts/terraform-import/import-ecr.sh" ]; then
-          bash ../../.github/scripts/terraform-import/import-ecr.sh "bankapp" "${{ env.AWS_REGION }}" "./infra/stage-1-aws"
-        fi
+      - name: Import IAM Role
+        run: bash ../../.github/scripts/terraform-import/import-iam-role.sh "bankapp-${{ needs.determine-environment.outputs.environment }}-node-group-role" "module.eks.aws_iam_role.node_group" "./infra/stage-1-aws"
 
-    # Script for Target Group import
-    - name: Import ALB Target Group if it exists
-      run: |
-        if [ -f "../../.github/scripts/terraform-import/import-tg.sh" ]; then
-          bash ../../.github/scripts/terraform-import/import-tg.sh "bankapp-${{ needs.determine-environment.outputs.environment }}-tg" "${{ env.AWS_REGION }}" "./infra/stage-1-aws"
-        fi
+      - name: Import RDS Subnet Group
+        run: bash ../../.github/scripts/terraform-import/import-rds-subnet-group.sh "bankapp-${{ needs.determine-environment.outputs.environment }}-db-subnet-group" "module.rds.aws_db_subnet_group.main" "./infra/stage-1-aws"
 
-    # Script for IAM Role import
-    - name: Import IAM Role if it exists
-      run: |
-        if [ -f "../../.github/scripts/terraform-import/import-iam-role.sh" ]; then
-          bash ../../.github/scripts/terraform-import/import-iam-role.sh "bankapp-${{ needs.determine-environment.outputs.environment }}-cluster-role" "module.eks.aws_iam_role.cluster" "./infra/stage-1-aws"
-        fi
+      - name: Force unlock Terraform state
+        if: always()
+        run: bash ../../.github/scripts/terraform-import/force-unlock.sh "terraform-state-lock-${{ needs.determine-environment.outputs.environment }}" "${{ env.AWS_REGION }}"
 
-    # Script for RDS Subnet Group import
-    - name: Import RDS Subnet Group if it exists
-      run: |
-        if [ -f "../../.github/scripts/terraform-import/import-rds-subnet-group.sh" ]; then
-          bash ../../.github/scripts/terraform-import/import-rds-subnet-group.sh "bankapp-${{ needs.determine-environment.outputs.environment }}-db-subnet-group" "module.rds.aws_db_subnet_group.main" "./infra/stage-1-aws"
-        fi
+      - id: plan
+        run: terraform plan -out=tfplan
+      - if: steps.plan.outcome == 'success'
+        run: terraform apply -auto-approve tfplan
 
-    # Script for Force Unlock
-    - name: Check & force unlock state Terraform lock
-      if: always()
-      run: |
-        if [ -f "../../.github/scripts/terraform-import/force-unlock.sh" ]; then
-          bash ../../.github/scripts/terraform-import/force-unlock.sh "terraform-state-lock-${{ needs.determine-environment.outputs.environment }}" "${{ env.AWS_REGION }}"
-        fi
-
-    - name: Terraform Plan (Stage 1)
-      id: plan
-      run: terraform plan -out=tfplan
-
-    - name: Terraform Apply (Stage 1)
-      if: steps.plan.outcome == 'success'
-      run: terraform apply -auto-approve tfplan
-
-    - name: Get Stage 1 Outputs
-      id: get-outputs
-      run: |
-        echo "Getting Terraform outputs..."
-        CLUSTER_NAME=$(terraform output -raw eks_cluster_id 2>/dev/null || echo "")
-        ECR_URL=$(terraform output -raw ecr_repository_url 2>/dev/null || echo "")
-        LB_DNS=$(terraform output -raw load_balancer_dns 2>/dev/null || echo "")
-        CLUSTER_ENDPOINT=$(terraform output -raw eks_cluster_endpoint 2>/dev/null || echo "")
-        CLUSTER_CA=$(terraform output -raw eks_cluster_certificate_authority_data 2>/dev/null || echo "")
-        OIDC_ARN=$(terraform output -raw eks_oidc_provider_arn 2>/dev/null || echo "")
-        TARGET_GROUP_ARN=$(terraform output -raw target_group_arn 2>/dev/null || echo "")
-        RDS_ENDPOINT=$(terraform output -raw rds_endpoint 2>/dev/null || echo "")
-        
-        if [ -z "$CLUSTER_NAME" ]; then
-          echo "ERROR: Could not get cluster name from Terraform outputs"
-          terraform output
-          exit 1
-        fi
-        
-        echo "cluster_name=$CLUSTER_NAME" >> $GITHUB_OUTPUT
-        echo "ecr_repository_url=$ECR_URL" >> $GITHUB_OUTPUT
-        echo "load_balancer_dns=$LB_DNS" >> $GITHUB_OUTPUT
-        echo "cluster_endpoint=$CLUSTER_ENDPOINT" >> $GITHUB_OUTPUT
-        echo "cluster_ca=$CLUSTER_CA" >> $GITHUB_OUTPUT
-        echo "oidc_provider_arn=$OIDC_ARN" >> $GITHUB_OUTPUT
-        echo "target_group_arn=$TARGET_GROUP_ARN" >> $GITHUB_OUTPUT
-        echo "rds_endpoint=$RDS_ENDPOINT" >> $GITHUB_OUTPUT
-        
-        echo "Outputs set:"
-        echo "  cluster_name: $CLUSTER_NAME"
-        echo "  ecr_repository_url: $ECR_URL"
-        echo "  load_balancer_dns: $LB_DNS"
-        echo "  cluster_endpoint: $CLUSTER_ENDPOINT"
-        echo "  oidc_provider_arn: $OIDC_ARN"
-        echo "  target_group_arn: $TARGET_GROUP_ARN"
-        echo "  rds_endpoint: $RDS_ENDPOINT"
+      - id: get-outputs
+        run: |
+          echo "cluster_name=$(terraform output -raw eks_cluster_id || echo '')" >> $GITHUB_OUTPUT
+          echo "ecr_repository_url=$(terraform output -raw ecr_repository_url || echo '')" >> $GITHUB_OUTPUT
+          echo "load_balancer_dns=$(terraform output -raw load_balancer_dns || echo '')" >> $GITHUB_OUTPUT
+          echo "cluster_endpoint=$(terraform output -raw eks_cluster_endpoint || echo '')" >> $GITHUB_OUTPUT
+          echo "cluster_ca=$(terraform output -raw eks_cluster_certificate_authority_data || echo '')" >> $GITHUB_OUTPUT
+          echo "oidc_provider_arn=$(terraform output -raw eks_oidc_provider_arn || echo '')" >> $GITHUB_OUTPUT
+          echo "target_group_arn=$(terraform output -raw target_group_arn || echo '')" >> $GITHUB_OUTPUT
+          echo "rds_endpoint=$(terraform output -raw rds_endpoint || echo '')" >> $GITHUB_OUTPUT
 
   stage-2-kubernetes:
     name: Deploy Kubernetes Resources (Stage 2)
@@ -169,112 +112,54 @@ jobs:
     defaults:
       run:
         working-directory: ./infra/stage-2-kubernetes
-    
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
 
-    - name: Debug Job Inputs
-      run: |
-        echo "=== Debugging Job Inputs ==="
-        echo "Environment: ${{ needs.determine-environment.outputs.environment }}"
-        echo "Cluster Name: ${{ needs.stage-1-aws-infrastructure.outputs.cluster-name }}"
-        echo "ECR URL: ${{ needs.stage-1-aws-infrastructure.outputs.ecr-repository-url }}"
-        echo "Load Balancer DNS: ${{ needs.stage-1-aws-infrastructure.outputs.load-balancer-dns }}"
-        echo "Cluster Endpoint: ${{ needs.stage-1-aws-infrastructure.outputs.cluster-endpoint }}"
-        echo "OIDC Provider ARN: ${{ needs.stage-1-aws-infrastructure.outputs.oidc-provider-arn }}"
-        echo "Target Group ARN: ${{ needs.stage-1-aws-infrastructure.outputs.target-group-arn }}"
-        echo "RDS Endpoint: ${{ needs.stage-1-aws-infrastructure.outputs.rds-endpoint }}"
-        echo "AWS Region: ${{ env.AWS_REGION }}"
-
-    - name: Setup Terraform
-      uses: hashicorp/setup-terraform@v3
-      with:
-        terraform_version: ${{ env.TF_VERSION }}
-        terraform_wrapper: false
-
-    - name: Configure AWS credentials
-      uses: aws-actions/configure-aws-credentials@v4
-      with:
-        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        aws-region: ${{ env.AWS_REGION }}
-
-    - name: Verify Cluster Exists
-      run: |
-        CLUSTER_NAME="${{ needs.stage-1-aws-infrastructure.outputs.cluster-name }}"
-        if [ -z "$CLUSTER_NAME" ]; then
-          echo "ERROR: Cluster name is empty"
-          exit 1
-        fi
-        
-        echo "Checking if cluster $CLUSTER_NAME exists..."
-        if aws eks describe-cluster --name "$CLUSTER_NAME" --region ${{ env.AWS_REGION }}; then
-          echo "✅ Cluster $CLUSTER_NAME exists"
-        else
-          echo "❌ Cluster $CLUSTER_NAME does not exist"
-          exit 1
-        fi
-
-    - name: Wait for EKS cluster to be active
-      run: |
-        CLUSTER_NAME="${{ needs.stage-1-aws-infrastructure.outputs.cluster-name }}"
-        echo "Waiting for cluster $CLUSTER_NAME to be active..."
-        aws eks wait cluster-active \
-          --name "$CLUSTER_NAME" \
+      - name: Wait for EKS cluster to be active
+        run: aws eks wait cluster-active \
+          --name "${{ needs.stage-1-aws-infrastructure.outputs.cluster-name }}" \
           --region ${{ env.AWS_REGION }}
-        echo "✅ Cluster is now active"
 
-    - name: Update kubeconfig
-      run: |
-        CLUSTER_NAME="${{ needs.stage-1-aws-infrastructure.outputs.cluster-name }}"
-        echo "Updating kubeconfig for cluster: $CLUSTER_NAME"
-        aws eks update-kubeconfig \
+      - name: Update kubeconfig
+        run: aws eks update-kubeconfig \
           --region ${{ env.AWS_REGION }} \
-          --name "$CLUSTER_NAME"
+          --name "${{ needs.stage-1-aws-infrastructure.outputs.cluster-name }}"
 
-    - name: Test Kubernetes Connection
-      run: |
-        echo "Testing Kubernetes connection..."
-        kubectl cluster-info
-        kubectl get nodes
+      - name: Create AWS Load Balancer Controller IAM Policy
+        run: |
+          POLICY_ARN="arn:aws:iam::$(aws sts get-caller-identity --query Account --output text):policy/AWSLoadBalancerControllerIAMPolicy"
+          if ! aws iam get-policy --policy-arn "$POLICY_ARN" >/dev/null 2>&1; then
+            curl -o iam_policy.json https://raw.githubusercontent.com/kubernetes-sigs/aws-load-balancer-controller/v2.7.2/docs/install/iam_policy.json
+            aws iam create-policy --policy-name AWSLoadBalancerControllerIAMPolicy --policy-document file://iam_policy.json
+          fi
 
-    - name: Create AWS Load Balancer Controller IAM Policy
-      run: |
-        POLICY_ARN="arn:aws:iam::$(aws sts get-caller-identity --query Account --output text):policy/AWSLoadBalancerControllerIAMPolicy"
-        if ! aws iam get-policy --policy-arn "$POLICY_ARN" >/dev/null 2>&1; then
-          echo "Creating AWS Load Balancer Controller IAM Policy..."
-          curl -o iam_policy.json https://raw.githubusercontent.com/kubernetes-sigs/aws-load-balancer-controller/v2.7.2/docs/install/iam_policy.json
-          aws iam create-policy \
-            --policy-name AWSLoadBalancerControllerIAMPolicy \
-            --policy-document file://iam_policy.json
-          echo "✅ Policy created"
-        else
-          echo "✅ Policy already exists"
-        fi
+      - name: Terraform Init
+        run: |
+          terraform init \
+            -backend-config="bucket=bankapp-terraform-state-2024" \
+            -backend-config="key=stage-2-${{ needs.determine-environment.outputs.environment }}/terraform.tfstate" \
+            -backend-config="region=${{ env.AWS_REGION }}" \
+            -backend-config="dynamodb_table=terraform-state-lock-${{ needs.determine-environment.outputs.environment }}"
 
-    - name: Terraform Init (Stage 2)
-      run: |
-        terraform init \
-          -backend-config="bucket=bankapp-terraform-state-2024" \
-          -backend-config="key=stage-2-${{ needs.determine-environment.outputs.environment }}/terraform.tfstate" \
-          -backend-config="region=${{ env.AWS_REGION }}" \
-          -backend-config="dynamodb_table=terraform-state-lock-${{ needs.determine-environment.outputs.environment }}"
-
-    - name: Terraform Plan (Stage 2)
-      run: |
-        terraform plan -out=tfplan \
+      - run: terraform plan -out=tfplan \
           -var="aws_region=${{ env.AWS_REGION }}" \
           -var="project_name=bankapp" \
           -var="environment=${{ needs.determine-environment.outputs.environment }}" \
           -var="namespace=bankapp-${{ needs.determine-environment.outputs.environment }}" \
           -var="db_password=${{ secrets.DB_PASSWORD }}"
 
-    - name: Terraform Apply (Stage 2)
-      run: terraform apply -auto-approve tfplan
+      - run: terraform apply -auto-approve tfplan
 
-    - name: Verify Deployment
-      run: |
-        echo "Verifying Kubernetes deployment..."
-        kubectl get all -n bankapp-${{ needs.determine-environment.outputs.environment }}
-        kubectl get ingress -n bankapp-${{ needs.determine-environment.outputs.environment }}
+      - name: Verify Deployment
+        run: |
+          kubectl get all -n bankapp-${{ needs.determine-environment.outputs.environment }}
+          kubectl get ingress -n bankapp-${{ needs.determine-environment.outputs.environment }}
