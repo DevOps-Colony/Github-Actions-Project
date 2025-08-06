@@ -84,9 +84,11 @@ jobs:
     - name: Import IAM Role if it exists
       run: bash ../../.github/scripts/terraform-import/import-iam-role.sh "bankapp-${{ needs.determine-environment.outputs.environment }}-cluster-role" "module.eks.aws_iam_role.cluster"
 
-    # Script for RDS Subnet Group import (with correct Terraform address)
+    # Script for RDS Subnet Group import
     - name: Import RDS Subnet Group if it exists
-      run: bash ../../.github/scripts/terraform-import/import-rds-subnet-group.sh "bankapp-${{ needs.determine-environment.outputs.environment }}-db-subnet-group" "module.rds.aws_db_subnet_group.main"
+      run: bash ../../.github/scripts/terraform-import/import-rds-subnet-group.sh \
+       "bankapp-${{ needs.determine-environment.outputs.environment }}-db-subnet-group" \
+       "module.rds.aws_db_subnet_group.main"
 
     # Script for Force Unlock
     - name: Check & force unlock state Terraform lock
