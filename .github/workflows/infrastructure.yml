@@ -67,27 +67,27 @@ jobs:
         aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         aws-region: ${{ env.AWS_REGION }}
-
+        
     # Script for ECR import
     - name: Import existing ECR repo if it exists
-      run: bash .github/scripts/terraform-import/import-ecr.sh "bankapp" "${{ env.AWS_REGION }}"
+      run: bash ../../.github/scripts/terraform-import/import-ecr.sh "bankapp" "${{ env.AWS_REGION }}"
 
     # Script for Target Group import
     - name: Import ALB Target Group if it exists
-      run: bash .github/scripts/terraform-import/import-tg.sh "bankapp-${{ needs.determine-environment.outputs.environment }}-tg" "${{ env.AWS_REGION }}"
+      run: bash ../../.github/scripts/terraform-import/import-tg.sh "bankapp-${{ needs.determine-environment.outputs.environment }}-tg" "${{ env.AWS_REGION }}"
 
     # Script for IAM Role import
     - name: Import IAM Role if it exists
-      run: bash .github/scripts/terraform-import/import-iam-role.sh "bankapp-${{ needs.determine-environment.outputs.environment }}-cluster-role" "module.eks.aws_iam_role.cluster"
+      run: bash ../../.github/scripts/terraform-import/import-iam-role.sh "bankapp-${{ needs.determine-environment.outputs.environment }}-cluster-role" "module.eks.aws_iam_role.cluster"
 
     # Script for RDS Subnet Group import
     - name: Import RDS Subnet Group if it exists
-      run: bash .github/scripts/terraform-import/import-rds-subnet-group.sh "bankapp-${{ needs.determine-environment.outputs.environment }}-db-subnet-group"
+      run: bash ../../.github/scripts/terraform-import/import-rds-subnet-group.sh "bankapp-${{ needs.determine-environment.outputs.environment }}-db-subnet-group"
 
     # Script for Force Unlock
     - name: Check & force unlock state Terraform lock
       if: always()
-      run: bash .github/scripts/terraform-import/force-unlock.sh "terraform-state-lock-${{ needs.determine-environment.outputs.environment }}" "${{ env.AWS_REGION }}"
+      run: bash ../../.github/scripts/terraform-import/force-unlock.sh "terraform-state-lock-${{ needs.determine-environment.outputs.environment }}" "${{ env.AWS_REGION }}"
 
     - name: Terraform Plan (Stage 1)
       id: plan
