@@ -55,10 +55,12 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+
       - uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: ${{ env.TF_VERSION }}
           terraform_wrapper: false
+
       - uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
@@ -73,11 +75,11 @@ jobs:
             -backend-config="region=${{ env.AWS_REGION }}" \
             -backend-config="dynamodb_table=terraform-state-lock-${{ needs.determine-environment.outputs.environment }}"
 
-      - name: Import existing resources
+      - name: Import all existing resources
         run: |
           chmod +x ../../.github/scripts/terraform-import/import-all-resources.sh
-          bash ../../.github/scripts/terraform-import/import-all-resources.sh \
-            "bankapp-${{ needs.determine-environment.outputs.environment }}" \
+          ../../.github/scripts/terraform-import/import-all-resources.sh \
+            "${{ needs.determine-environment.outputs.environment }}" \
             "${{ env.AWS_REGION }}" \
             "."
 
@@ -86,8 +88,7 @@ jobs:
           terraform plan -out=tfplan
           terraform apply -auto-approve tfplan
 
-      - name: Get Terraform Outputs
-        id: get-outputs
+      - id: get-outputs
         run: |
           echo "cluster_name=$(terraform output -raw eks_cluster_id || echo '')" >> $GITHUB_OUTPUT
           echo "ecr_repository_url=$(terraform output -raw ecr_repository_url || echo '')" >> $GITHUB_OUTPUT
@@ -108,21 +109,27 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+
       - uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: ${{ env.TF_VERSION }}
           terraform_wrapper: false
+
       - uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Wait for EKS cluster
-        run: aws eks wait cluster-active --name "${{ needs.stage-1-aws-infrastructure.outputs.cluster-name }}" --region ${{ env.AWS_REGION }}
+      - name: Wait for EKS cluster to be active
+        run: aws eks wait cluster-active \
+          --name "${{ needs.stage-1-aws-infrastructure.outputs.cluster-name }}" \
+          --region ${{ env.AWS_REGION }}
 
       - name: Update kubeconfig
-        run: aws eks update-kubeconfig --region ${{ env.AWS_REGION }} --name "${{ needs.stage-1-aws-infrastructure.outputs.cluster-name }}"
+        run: aws eks update-kubeconfig \
+          --region ${{ env.AWS_REGION }} \
+          --name "${{ needs.stage-1-aws-infrastructure.outputs.cluster-name }}"
 
       - name: Create AWS Load Balancer Controller IAM Policy
         run: |
@@ -132,22 +139,22 @@ jobs:
             aws iam create-policy --policy-name AWSLoadBalancerControllerIAMPolicy --policy-document file://iam_policy.json
           fi
 
-      - name: Deploy Kubernetes resources
+      - name: Terraform Init
         run: |
           terraform init \
             -backend-config="bucket=bankapp-terraform-state-2024" \
             -backend-config="key=stage-2-${{ needs.determine-environment.outputs.environment }}/terraform.tfstate" \
             -backend-config="region=${{ env.AWS_REGION }}" \
             -backend-config="dynamodb_table=terraform-state-lock-${{ needs.determine-environment.outputs.environment }}"
-          
-          terraform plan -out=tfplan \
-            -var="aws_region=${{ env.AWS_REGION }}" \
-            -var="project_name=bankapp" \
-            -var="environment=${{ needs.determine-environment.outputs.environment }}" \
-            -var="namespace=bankapp-${{ needs.determine-environment.outputs.environment }}" \
-            -var="db_password=${{ secrets.DB_PASSWORD }}"
-          
-          terraform apply -auto-approve tfplan
+
+      - run: terraform plan -out=tfplan \
+          -var="aws_region=${{ env.AWS_REGION }}" \
+          -var="project_name=bankapp" \
+          -var="environment=${{ needs.determine-environment.outputs.environment }}" \
+          -var="namespace=bankapp-${{ needs.determine-environment.outputs.environment }}" \
+          -var="db_password=${{ secrets.DB_PASSWORD }}"
+
+      - run: terraform apply -auto-approve tfplan
 
       - name: Verify Deployment
         run: |
