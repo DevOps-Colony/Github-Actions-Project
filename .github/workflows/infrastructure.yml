@@ -111,9 +111,22 @@ jobs:
     - name: Terraform Init
       run: terraform init
 
+    - name: Import existing ECR repo if it exists
+      run: |
+        ECR_NAME="bankapp"
+        echo "Checking if ECR repo '$ECR_NAME' exists in AWS..."
+        if aws ecr describe-repositories --repository-names "$ECR_NAME" --region ${{ env.AWS_REGION }} --query "repositories[0].repositoryName" --output text >/dev/null 2>&1; then
+          echo "ECR repo '$ECR_NAME' already exists. Importing into Terraform state..."
+          if ! terraform state list | grep -q "aws_ecr_repository.app_repo"; then
+            terraform import aws_ecr_repository.app_repo "$ECR_NAME" || echo "Import skipped."
+          else
+            echo "ECR repo already in Terraform state. Skipping import."
+          fi
+        else
+          echo "ECR repo '$ECR_NAME' does not exist. Terraform will create it."
+        fi
 
-
-    - name: Check & force unlock stale Terraform lock
+    - name: Check & force unlock state Terraform lock
       if: always()
       run: |
         LOCK_TABLE_NAME="terraform-state-lock-${{ needs.determine-environment.outputs.environment }}"
