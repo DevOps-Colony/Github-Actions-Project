@@ -67,7 +67,10 @@ jobs:
         aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         aws-region: ${{ env.AWS_REGION }}
-        
+
+    - name: Terraform Init (Stage 1)
+      run: terraform init
+
     # Script for ECR import
     - name: Import existing ECR repo if it exists
       run: bash ../../.github/scripts/terraform-import/import-ecr.sh "bankapp" "${{ env.AWS_REGION }}"
