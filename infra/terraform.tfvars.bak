@@ -1,13 +1,13 @@
 project_name    = "bankapp"
 environment     = "dev"
-aws_region      = "us-west-2"
+aws_region      = "ap-south-1"
 
 # IMPORTANT: Make this unique by adding your initials or random numbers
 terraform_state_bucket = "bankapp-terraform-state-devops-colony-2024"
 
 # VPC Configuration
 vpc_cidr             = "10.0.0.0/16"
-availability_zones   = ["us-west-2a", "us-west-2b", "us-west-2c"]
+availability_zones   = ["ap-south-1a", "ap-south-1b", "ap-south-1c"]
 private_subnet_cidrs = ["10.0.1.0/24", "10.0.2.0/24", "10.0.3.0/24"]
 public_subnet_cidrs  = ["10.0.101.0/24", "10.0.102.0/24", "10.0.103.0/24"]
 
