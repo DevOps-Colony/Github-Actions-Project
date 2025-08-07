@@ -10,7 +10,7 @@ on:
   workflow_dispatch:
 
 env:
-  AWS_REGION: ap-south-1
+  AWS_REGION: us-west-2
   ENVIRONMENT: production
   JAVA_VERSION: '17'
 
