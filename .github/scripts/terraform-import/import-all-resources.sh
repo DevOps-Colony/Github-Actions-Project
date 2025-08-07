@@ -186,10 +186,17 @@ if resource_exists_aws "aws rds describe-db-subnet-groups --region $AWS_REGION -
 fi
 
 # Import RDS Security Group
+# Import RDS Security Group
 if resource_exists_aws "aws ec2 describe-security-groups --region $AWS_REGION --filters 'Name=group-name,Values=bankapp-${ENVIRONMENT}-rds-*'"; then
-    RDS_SG_ID=$(aws ec2 describe-security-groups --region $AWS_REGION --filters "Name=group-name,Values=bankapp-${ENVIRONMENT}-rds-*" --query 'SecurityGroups[0].GroupId' --output text)
+  RDS_SG_ID=$(aws ec2 describe-security-groups --region $AWS_REGION --filters "Name=group-name,Values=bankapp-${ENVIRONMENT}-rds-*" --query 'SecurityGroups[0].GroupId' --output text)
+
+  if [ -n "$RDS_SG_ID" ] && [ "$RDS_SG_ID" != "None" ]; then
     safe_import "module.rds.aws_security_group.rds_sg" "$RDS_SG_ID" "RDS Security Group"
+  else
+    echo "⚠️ No RDS Security Group found, skipping import."
+  fi
 fi
+
 
 # Import RDS Instance
 if resource_exists_aws "aws rds describe-db-instances --region $AWS_REGION --db-instance-identifier bankapp-${ENVIRONMENT}-db"; then
