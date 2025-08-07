@@ -208,11 +208,11 @@ fi
 echo "🔒 Importing additional security groups..."
 
 # EKS Cluster Security Group
-if [ -n "$VPC_ID" ] && [ "$VPC_ID" != "null" ]; then
-    CLUSTER_SG_ID=$(aws ec2 describe-security-groups --region $AWS_REGION --filters "Name=vpc-id,Values=$VPC_ID" "Name=group-name,Values=*eks-cluster-sg-*" --query 'SecurityGroups[0].GroupId' --output text 2>/dev/null || echo "")
-    if [ -n "$CLUSTER_SG_ID" ] && [ "$CLUSTER_SG_ID" != "None" ]; then
-        safe_import "module.eks.aws_security_group.cluster" "$CLUSTER_SG_ID" "EKS Cluster Security Group"
-    fi
+#if [ -n "$VPC_ID" ] && [ "$VPC_ID" != "null" ]; then
+    #CLUSTER_SG_ID=$(aws ec2 describe-security-groups --region $AWS_REGION --filters "Name=vpc-id,Values=$VPC_ID" "Name=group-name,Values=*eks-cluster-sg-*" --query 'SecurityGroups[0].GroupId' --output text 2>/dev/null || echo "")
+    #if [ -n "$CLUSTER_SG_ID" ] && [ "$CLUSTER_SG_ID" != "None" ]; then
+    #    safe_import "module.eks.aws_security_group.cluster" "$CLUSTER_SG_ID" "EKS Cluster Security Group"
+    #fi
     
     # EKS Node Security Group
     NODE_SG_ID=$(aws ec2 describe-security-groups --region $AWS_REGION --filters "Name=vpc-id,Values=$VPC_ID" "Name=group-name,Values=*eks-node-group-*" --query 'SecurityGroups[0].GroupId' --output text 2>/dev/null || echo "")
