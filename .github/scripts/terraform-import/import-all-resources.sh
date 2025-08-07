@@ -219,7 +219,6 @@ echo "🔒 Importing additional security groups..."
     if [ -n "$NODE_SG_ID" ] && [ "$NODE_SG_ID" != "None" ]; then
         safe_import "module.eks.aws_security_group.node" "$NODE_SG_ID" "EKS Node Security Group"
     fi
-fi
 
 # 7. Import Elastic IPs for NAT Gateways
 echo "🌐 Importing Elastic IPs..."
