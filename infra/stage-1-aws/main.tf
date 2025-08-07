@@ -10,7 +10,7 @@ terraform {
   backend "s3" {
     bucket         = "bankapp-terraform-state-2024"
     key            = "stage-1/terraform.tfstate"
-    region         = "us-west-2"
+    region         = "ap-south-1"
     dynamodb_table = "terraform-state-lock"
     encrypt        = true
   }
