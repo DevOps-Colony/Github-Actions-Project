@@ -33,6 +33,7 @@ jobs:
             echo "environment=production" >> $GITHUB_OUTPUT
           else
             echo "environment=staging" >> $GITHUB_OUTPUT
+            fi
 
   stage-1-aws-infrastructure:
     name: Deploy AWS Infrastructure (Stage 1)
