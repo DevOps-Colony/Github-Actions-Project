@@ -40,35 +40,30 @@ jobs:
           path: ~/.sonar/cache
           key: ${{ runner.os }}-sonar
           restore-keys: ${{ runner.os }}-sonar
+      
 
       - name: SonarCloud Scan
-        uses: SonarSource/sonarqube-scan-action@v5.0.0
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        uses: sonarsource/sonarcloud-github-action@master
         with:
-          args: >
-            -Dsonar.branch.name=${{ github.ref_name }}
-            -Dsonar.branch.target=develop
+         args: >
+          -Dsonar.projectKey=my_org_my_project
+          -Dsonar.organization=my_org
+          -Dsonar.qualitygate.wait=true
+        env:
+         SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+         SONAR_HOST_URL: "https://sonarcloud.io"
 
-      - name: Check Quality Gate
-        uses: sonarsource/sonarqube-quality-gate-action@master
-        with:
-          scanMetadataReportFile: .scannerwork/report-task.txt
-          pollingTimeoutSec: 300
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@master
-        continue-on-error: true
         with:
-          scan-type: 'fs'
-          scan-ref: '.'
-          format: 'template'
-          template: '@/contrib/sarif.tpl'
-          output: 'trivy-results.sarif'
-          severity: 'CRITICAL,HIGH'
-          timeout: '10m'
+         scan-type: 'fs'
+         scan-ref: '.'
+         format: 'sarif'
+         output: 'trivy-results.sarif'
+         severity: 'CRITICAL,HIGH'
+         timeout: '10m'
+
 
       - name: Upload Trivy scan results
         uses: github/codeql-action/upload-sarif@v3
