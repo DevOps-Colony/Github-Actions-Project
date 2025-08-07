@@ -19,5 +19,5 @@ replicas:
 
 images:
 - name: bankapp
-  newName: ACCOUNT_ID.dkr.ecr.ap-south-1.amazonaws.com/bankapp
+  newName: ACCOUNT_ID.dkr.ecr.us-west-2.amazonaws.com/bankapp
   newTag: staging-latest

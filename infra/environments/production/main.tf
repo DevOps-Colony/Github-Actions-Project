@@ -16,7 +16,7 @@ terraform {
   backend "s3" {
     bucket         = "bankapp-terraform-state-production-2024"
     key            = "production/terraform.tfstate"
-    region         = "ap-south-1"
+    region         = "us-west-2"
     dynamodb_table = "terraform-state-lock-production"
     encrypt        = true
   }

@@ -1,7 +1,7 @@
 replicaCount: 3
 
 image:
-  repository: ACCOUNT_ID.dkr.ecr.ap-south-1.amazonaws.com/bankapp
+  repository: ACCOUNT_ID.dkr.ecr.us-west-2.amazonaws.com/bankapp
   tag: production-latest
 
 resources:

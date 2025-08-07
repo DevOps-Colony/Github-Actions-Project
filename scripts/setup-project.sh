@@ -89,7 +89,7 @@ terraform {
   backend "s3" {
     bucket         = "BUCKET_NAME_PLACEHOLDER"
     key            = "terraform/infrastructure.tfstate"
-    region         = "ap-south-1"
+    region         = "us-west-2"
     dynamodb_table = "terraform-state-lock"
     encrypt        = true
   }
@@ -106,7 +106,7 @@ display_github_secrets() {
   -----------------------------------------
   • AWS_ACCESS_KEY_ID
   • AWS_SECRET_ACCESS_KEY
-  • AWS_REGION              (e.g. ap-south-1)
+  • AWS_REGION              (e.g. us-west-2)
   • SONAR_TOKEN             (from SonarCloud ⚙ → My Account → Security)
 EOF
 }

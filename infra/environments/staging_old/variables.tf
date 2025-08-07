@@ -13,7 +13,7 @@ variable "environment" {
 variable "aws_region" {
   description = "AWS region"
   type        = string
-  default     = "ap-south-1"
+  default     = "us-west-2"
 }
 
 # VPC Configuration
@@ -26,7 +26,7 @@ variable "vpc_cidr" {
 variable "availability_zones" {
   description = "Availability zones"
   type        = list(string)
-  default     = ["ap-south-1a", "ap-south-1b"]  # Only 2 AZs for staging
+  default     = ["us-west-2a", "us-west-2b"]  # Only 2 AZs for staging
 }
 
 variable "private_subnet_cidrs" {
