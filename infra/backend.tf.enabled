@@ -1,12 +1,35 @@
-# This file will be renamed to backend.tf during GitHub Actions workflow
-# The workflow will replace the bucket name with the actual value from terraform.tfvars
+resource "aws_s3_bucket" "tf_state" {
+  bucket = var.bucket_name
 
-terraform {
-  backend "s3" {
-    bucket         = "BUCKET_NAME_PLACEHOLDER"
-    key            = "terraform/infrastructure.tfstate"
-    region         = "ap-south-1"
-    dynamodb_table = "terraform-state-lock"
-    encrypt        = true
+  versioning {
+    enabled = true
+  }
+
+  server_side_encryption_configuration {
+    rule {
+      apply_server_side_encryption_by_default {
+        sse_algorithm = "AES256"
+      }
+    }
+  }
+
+  tags = {
+    Name        = "${var.environment}-terraform-state"
+    Environment = var.environment
   }
 }
+
+
+
+variables:
+
+
+variable "bucket_name" {
+  description = "S3 bucket name for storing Terraform state"
+  type        = string
+}
+
+
+tfvars
+
+bucket_name = "bankapp-terraform-state-2024"
