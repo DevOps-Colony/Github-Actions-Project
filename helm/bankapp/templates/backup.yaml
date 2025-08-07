@@ -1,0 +1,128 @@
+{{- if .Values.backup.enabled }}
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ template "bankapp.fullname" . }}-backup
+  labels:
+    app: {{ template "bankapp.name" . }}
+    chart: {{ template "bankapp.chart" . }}
+    release: {{ .Release.Name }}
+    heritage: {{ .Release.Service }}
+spec:
+  schedule: {{ .Values.backup.schedule | quote }}
+  successfulJobsHistoryLimit: {{ .Values.backup.retention }}
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          {{- if .Values.serviceAccount.create }}
+          serviceAccountName: {{ include "bankapp.serviceAccountName" . }}
+          {{- end }}
+          containers:
+            - name: backup
+              image: bitnami/mysqldump:latest
+              env:
+                - name: MYSQL_HOST
+                  valueFrom:
+                    secretKeyRef:
+                      name: db-secret
+                      key: host
+                - name: MYSQL_DATABASE
+                  valueFrom:
+                    secretKeyRef:
+                      name: db-secret
+                      key: database
+                - name: MYSQL_USER
+                  valueFrom:
+                    secretKeyRef:
+                      name: db-secret
+                      key: username
+                - name: MYSQL_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: db-secret
+                      key: password
+              volumeMounts:
+                - name: backup
+                  mountPath: /backups
+              command: 
+                - "/bin/sh"
+                - "-c"
+                - "mkdir -p /backups && mysqldump -h ${MYSQL_HOST} -u ${MYSQL_USER} -p${MYSQL_PASSWORD} ${MYSQL_DATABASE} > /backups/backup-$(date +%Y%m%d-%H%M%S).sql"
+          volumes:
+            - name: backup
+              persistentVolumeClaim:
+                claimName: {{ template "bankapp.fullname" . }}-backup
+          restartPolicy: OnFailure
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ template "bankapp.fullname" . }}-backup
+  labels:
+    app: {{ template "bankapp.name" . }}
+    chart: {{ template "bankapp.chart" . }}
+    release: {{ .Release.Name }}
+    heritage: {{ .Release.Service }}
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: {{ .Values.backup.storageClass }}
+  resources:
+    requests:
+      storage: {{ .Values.backup.storage }}
+                - |
+                  mkdir -p /backups
+                  mysqldump \
+                    -h ${MYSQL_HOST} \
+                    -u ${MYSQL_USER} \
+                    -p${MYSQL_PASSWORD} \
+                    ${MYSQL_DATABASE} > /backups/backup-$(date +%Y%m%d-%H%M%S).sql
+          volumes:
+            - name: backup
+              persistentVolumeClaim:
+                claimName: {{ template "bankapp.fullname" . }}-backup
+          restartPolicy: OnFailure
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ template "bankapp.fullname" . }}-backup
+  labels:
+    app: {{ template "bankapp.name" . }}
+    chart: {{ template "bankapp.chart" . }}
+    release: {{ .Release.Name }}
+    heritage: {{ .Release.Service }}
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: {{ .Values.backup.storageClass }}
+  resources:
+    requests:
+      storage: {{ .Values.backup.storage }}
+                - |
+                  mysqldump \
+                    --host=${MYSQL_HOST} \
+                    --user=${MYSQL_USER} \
+                    --password=${MYSQL_PASSWORD} \
+                    ${MYSQL_DATABASE} > /backups/backup-$(date +%Y%m%d-%H%M%S).sql
+          volumes:
+            - name: backup
+              persistentVolumeClaim:
+                claimName: {{ include "bankapp.fullname" . }}-backup
+          restartPolicy: OnFailure
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "bankapp.fullname" . }}-backup
+  labels:
+    {{- include "bankapp.labels" . | nindent 4 }}
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: {{ .Values.backup.storageClass }}
+  resources:
+    requests:
+      storage: {{ .Values.backup.volumeSize }}
+{{- end }}

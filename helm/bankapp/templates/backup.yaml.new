@@ -1,0 +1,76 @@
+{{- if .Values.backup.enabled }}
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ .Release.Name }}-backup
+  labels:
+    app.kubernetes.io/name: {{ .Release.Name }}-backup
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  schedule: {{ .Values.backup.schedule | quote }}
+  successfulJobsHistoryLimit: {{ .Values.backup.retention }}
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          serviceAccountName: {{ .Release.Name }}-sa
+          containers:
+            - name: backup
+              image: bitnami/mysqldump:latest
+              env:
+                - name: MYSQL_HOST
+                  valueFrom:
+                    secretKeyRef:
+                      name: db-secret
+                      key: host
+                - name: MYSQL_DATABASE
+                  valueFrom:
+                    secretKeyRef:
+                      name: db-secret
+                      key: database
+                - name: MYSQL_USER
+                  valueFrom:
+                    secretKeyRef:
+                      name: db-secret
+                      key: username
+                - name: MYSQL_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: db-secret
+                      key: password
+              command:
+                - /bin/sh
+                - -c
+                - |
+                  mysqldump \
+                    --host="${MYSQL_HOST}" \
+                    --user="${MYSQL_USER}" \
+                    --password="${MYSQL_PASSWORD}" \
+                    "${MYSQL_DATABASE}" > /backups/backup-$(date +%Y%m%d-%H%M%S).sql
+              volumeMounts:
+                - name: backup-storage
+                  mountPath: /backups
+          volumes:
+            - name: backup-storage
+              persistentVolumeClaim:
+                claimName: {{ .Release.Name }}-backup-pvc
+          restartPolicy: OnFailure
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ .Release.Name }}-backup-pvc
+  labels:
+    app.kubernetes.io/name: {{ .Release.Name }}-backup
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: {{ .Values.backup.storageClass | default "gp2" }}
+  resources:
+    requests:
+      storage: {{ .Values.backup.volumeSize }}
+{{- end }}

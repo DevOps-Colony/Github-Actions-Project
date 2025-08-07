@@ -1,0 +1,29 @@
+# Default values for bankapp
+replicaCount: 2
+
+image:
+  repository: ""
+  pullPolicy: IfNotPresent
+  tag: ""
+
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+
+podAnnotations: {}
+
+podSecurityContext:
+  fsGroup: 1001
+
+backup:
+  enabled: false
+  schedule: "0 1 * * *"  # Daily at 1 AM
+  retention: 7
+  storageClass: "gp2"
+  storage: "5Gi"
+
+# The rest of your values.yaml content here...

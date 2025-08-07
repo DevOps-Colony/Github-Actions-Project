@@ -1,0 +1,146 @@
+terraform {
+  required_version = ">= 1.0"
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 5.0"
+    }
+    kubernetes = {
+      source  = "hashicorp/kubernetes"
+      version = "~> 2.20"
+    }
+    helm = {
+      source  = "hashicorp/helm"
+      version = "~> 2.10"
+    }
+  }
+  
+  backend "s3" {}
+}
+
+provider "aws" {
+  region = var.aws_region
+}
+
+provider "kubernetes" {
+  host                   = module.eks.cluster_endpoint
+  cluster_ca_certificate = base64decode(module.eks.cluster_certificate_authority_data)
+  exec {
+    api_version = "client.authentication.k8s.io/v1beta1"
+    args        = ["eks", "get-token", "--cluster-name", module.eks.cluster_name]
+    command     = "aws"
+  }
+}
+
+provider "helm" {
+  kubernetes {
+    host                   = module.eks.cluster_endpoint
+    cluster_ca_certificate = base64decode(module.eks.cluster_certificate_authority_data)
+    exec {
+      api_version = "client.authentication.k8s.io/v1beta1"
+      args        = ["eks", "get-token", "--cluster-name", module.eks.cluster_name]
+      command     = "aws"
+    }
+  }
+}
+
+data "aws_availability_zones" "available" {
+  state = "available"
+}
+
+locals {
+  cluster_name = "${var.project_name}-${var.environment}"
+  vpc_name     = "${var.project_name}-${var.environment}"
+}
+
+module "vpc" {
+  source = "../../modules/vpc"
+
+  vpc_name            = local.vpc_name
+  vpc_cidr           = var.vpc_cidr
+  azs                = data.aws_availability_zones.available.names
+  private_subnets    = var.private_subnet_cidrs
+  public_subnets     = var.public_subnet_cidrs
+  
+  environment        = var.environment
+  project_name       = var.project_name
+}
+
+module "eks" {
+  source = "../../modules/eks"
+
+  cluster_name    = local.cluster_name
+  cluster_version = var.eks_cluster_version
+
+  vpc_id         = module.vpc.vpc_id
+  subnet_ids     = module.vpc.private_subnet_ids
+
+  min_size       = var.eks_node_min_capacity
+  max_size       = var.eks_node_max_capacity
+  desired_size   = var.eks_node_desired_capacity
+  instance_types = var.eks_node_instance_types
+
+  environment    = var.environment
+  project_name   = var.project_name
+}
+
+module "rds" {
+  source = "../../modules/rds"
+
+  identifier     = local.cluster_name
+  database_name  = var.db_name
+  username       = var.db_username
+  password       = var.db_password
+
+  instance_class = var.rds_instance_class
+  storage_size   = 20
+
+  vpc_id         = module.vpc.vpc_id
+  subnet_ids     = module.vpc.private_subnet_ids
+
+  environment    = var.environment
+  project_name   = var.project_name
+}
+
+module "monitoring" {
+  source = "../../modules/monitoring"
+
+  cluster_name    = module.eks.cluster_name
+  environment     = var.environment
+  project_name    = var.project_name
+
+  vpc_id          = module.vpc.vpc_id
+  subnet_ids      = module.vpc.private_subnet_ids
+}
+
+output "cluster_endpoint" {
+  description = "EKS cluster endpoint"
+  value       = module.eks.cluster_endpoint
+  sensitive   = true
+}
+
+output "cluster_name" {
+  description = "EKS cluster name"
+  value       = module.eks.cluster_name
+}
+
+output "load_balancer_hostname" {
+  description = "ALB hostname for application access"
+  value       = module.eks.load_balancer_hostname
+}
+
+output "prometheus_url" {
+  description = "Prometheus URL"
+  value       = "http://${module.eks.load_balancer_hostname}/prometheus"
+}
+
+output "grafana_url" {
+  description = "Grafana URL"
+  value       = "http://${module.eks.load_balancer_hostname}/grafana"
+}
+
+output "db_endpoint" {
+  description = "RDS instance endpoint"
+  value       = module.rds.endpoint
+  sensitive   = true
+}

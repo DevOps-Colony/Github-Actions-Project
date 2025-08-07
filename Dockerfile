@@ -1,13 +1,29 @@
-FROM eclipse-temurin:17-jdk-alpine
+# Build stage
+FROM eclipse-temurin:17-jdk-alpine AS builder
+WORKDIR /build
+COPY . .
+RUN ./mvnw clean package -DskipTests
 
-EXPOSE 8080
+# Run stage
+FROM eclipse-temurin:17-jre-alpine
+WORKDIR /app
 
-RUN ls
+# Add non-root user
+RUN addgroup -S spring && adduser -S spring -G spring
+USER spring:spring
 
-ENV APP_HOME=/usr/src/app
+# Copy jar from builder stage
+COPY --from=builder /build/target/*.jar app.jar
 
-COPY target/*.jar $APP_HOME/app.jar
+# Environment variables
+ENV JAVA_OPTS="-Xmx512m -Xms256m"
+ENV SERVER_PORT=8080
 
-WORKDIR $APP_HOME
+EXPOSE ${SERVER_PORT}
 
-CMD ["java", "-jar", "app.jar"]
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s \
+  CMD wget --no-verbose --tries=1 --spider http://localhost:${SERVER_PORT}/actuator/health || exit 1
+
+# Run the application
+ENTRYPOINT ["sh", "-c", "java ${JAVA_OPTS} -jar app.jar"]

@@ -1,7 +1,7 @@
 variable "aws_region" {
-  description = "AWS Region where resources will be created"
+  description = "AWS region"
   type        = string
-  default     = null # Will be set via environment variable TF_VAR_aws_region
+  default     = "us-west-2"
 }
 
 variable "project_name" {
@@ -11,31 +11,16 @@ variable "project_name" {
 }
 
 variable "environment" {
-  description = "Environment name"
+  description = "Environment (e.g., staging, production)"
   type        = string
-  default     = "dev"
+  default     = "production"
 }
 
-variable "aws_region" {
-  description = "AWS region"
-  type        = string
-  default     = "ap-south-1"
-}
-
-variable "terraform_state_bucket" {
-  description = "S3 bucket name for Terraform state"
-  type        = string
-  default     = "bankapp-terraform-state-bucket"
-}
-
-# VPC Configuration
 variable "vpc_cidr" {
   description = "CIDR block for VPC"
   type        = string
   default     = "10.0.0.0/16"
 }
-
-# Availability zones are now fetched automatically using data source
 
 variable "private_subnet_cidrs" {
   description = "CIDR blocks for private subnets"
@@ -49,29 +34,28 @@ variable "public_subnet_cidrs" {
   default     = ["10.0.101.0/24", "10.0.102.0/24", "10.0.103.0/24"]
 }
 
-# EKS Configuration
 variable "eks_cluster_version" {
-  description = "EKS cluster version"
+  description = "Kubernetes version for EKS cluster"
   type        = string
-  default     = "1.28"
+  default     = "1.27"
 }
 
-variable "eks_node_desired_capacity" {
-  description = "Desired number of nodes"
+variable "eks_node_min_capacity" {
+  description = "Minimum number of nodes in EKS node group"
   type        = number
   default     = 2
 }
 
 variable "eks_node_max_capacity" {
-  description = "Maximum number of nodes"
+  description = "Maximum number of nodes in EKS node group"
   type        = number
-  default     = 4
+  default     = 5
 }
 
-variable "eks_node_min_capacity" {
-  description = "Minimum number of nodes"
+variable "eks_node_desired_capacity" {
+  description = "Desired number of nodes in EKS node group"
   type        = number
-  default     = 1
+  default     = 3
 }
 
 variable "eks_node_instance_types" {
@@ -80,28 +64,26 @@ variable "eks_node_instance_types" {
   default     = ["t3.medium"]
 }
 
-# RDS Configuration
-variable "rds_instance_class" {
-  description = "RDS instance class"
-  type        = string
-  default     = "db.t3.micro"
-}
-
 variable "db_name" {
-  description = "Database name"
+  description = "Name of the database"
   type        = string
   default     = "bankapp"
 }
 
 variable "db_username" {
-  description = "Database username"
+  description = "Master username for the RDS instance"
   type        = string
-  default     = "admin"
+  sensitive   = true
 }
 
 variable "db_password" {
-  description = "Database password"
+  description = "Master password for the RDS instance"
   type        = string
-  default     = "bankapp123!"
   sensitive   = true
+}
+
+variable "rds_instance_class" {
+  description = "Instance class for RDS"
+  type        = string
+  default     = "db.t3.medium"
 }

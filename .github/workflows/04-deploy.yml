@@ -1,0 +1,73 @@
+name: Deploy Application
+
+on:
+  workflow_run:
+    workflows: ["Build and Test"]
+    branches: [ main, develop ]
+    types: 
+      - completed
+
+env:
+  AWS_REGION: ${{ vars.AWS_REGION || 'ap-south-1' }}
+  PROJECT_NAME: ${{ vars.PROJECT_NAME || 'bankapp' }}
+  HELM_VERSION: "3.12.3"
+
+jobs:
+  determine-environment:
+    runs-on: ubuntu-latest
+    outputs:
+      environment: ${{ steps.set-env.outputs.environment }}
+    steps:
+      - name: Determine environment
+        id: set-env
+        run: |
+          if [ "${{ github.ref }}" == "refs/heads/main" ]; then
+            echo "environment=production" >> $GITHUB_OUTPUT
+          else
+            echo "environment=staging" >> $GITHUB_OUTPUT
+          fi
+
+  deploy:
+    needs: determine-environment
+    runs-on: ubuntu-latest
+    environment: ${{ needs.determine-environment.outputs.environment }}
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Update kubeconfig
+        run: |
+          aws eks update-kubeconfig \
+            --region ${{ env.AWS_REGION }} \
+            --name ${{ env.PROJECT_NAME }}-${{ needs.determine-environment.outputs.environment }}
+
+      - name: Install Helm
+        uses: azure/setup-helm@v3
+        with:
+          version: ${{ env.HELM_VERSION }}
+
+      - name: Deploy Application
+        run: |
+          # Get the image tag from the build workflow
+          IMAGE_TAG=$(curl -s "${{ github.api_url }}/repos/${{ github.repository }}/actions/runs/${{ github.event.workflow_run.id }}/artifacts" | jq -r '.artifacts[0].name')
+          
+          helm upgrade --install ${{ env.PROJECT_NAME }} ./helm/bankapp \
+            --namespace ${{ env.PROJECT_NAME }}-${{ needs.determine-environment.outputs.environment }} \
+            --create-namespace \
+            --values ./helm/bankapp/values-${{ needs.determine-environment.outputs.environment }}.yaml \
+            --set image.tag=$IMAGE_TAG \
+            --set environment=${{ needs.determine-environment.outputs.environment }} \
+            --wait --timeout 10m
+
+      - name: Verify Deployment
+        run: |
+          kubectl get all -n ${{ env.PROJECT_NAME }}-${{ needs.determine-environment.outputs.environment }}
+          kubectl get ingress -n ${{ env.PROJECT_NAME }}-${{ needs.determine-environment.outputs.environment }}

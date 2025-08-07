@@ -11,15 +11,13 @@ terraform {
       source  = "hashicorp/kubernetes"
       version = "~> 2.20"
     }
+    helm = {
+      source  = "hashicorp/helm"
+      version = "~> 2.10"
+    }
   }
   
-  backend "s3" {
-    bucket         = "bankapp-terraform-state-production-2024"
-    key            = "production/terraform.tfstate"
-    region         = "ap-south-1"
-    dynamodb_table = "terraform-state-lock-production"
-    encrypt        = true
-  }
+  backend "s3" {}
 }
 
 provider "aws" {
@@ -88,6 +86,10 @@ module "rds" {
   
   identifier = "${var.project_name}-${var.environment}-db"
   
+  # Module required fields
+  environment  = var.environment
+  project_name = var.project_name
+
   # Engine configuration
   engine         = "mysql"
   engine_version = "8.0.35"
@@ -101,7 +103,7 @@ module "rds" {
   # Network configuration
   vpc_id                   = module.vpc.vpc_id
   subnet_ids               = module.vpc.private_subnet_ids
-  allowed_security_groups  = [module.eks.cluster_security_group_id]
+  allowed_security_group_ids  = [module.eks.cluster_security_group_id]
   publicly_accessible      = false
   
   # Storage configuration (larger for production)
