@@ -32,13 +32,13 @@ jobs:
           echo "sonar.projectKey=${{ github.repository_owner }}_${{ github.event.repository.name }}" >> sonar-project.properties
 
       - name: SonarCloud Scan
-        uses: SonarSource/sonarcloud-github-action@master
+        uses: SonarSource/sonarqube-scan-action@v5.0.0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
-      - name: Run Trivy vulnerability scanner in repo mode
-        uses: aquasecurity/trivy-action@master
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@v1
         with:
           scan-type: 'fs'
           ignore-unfixed: true

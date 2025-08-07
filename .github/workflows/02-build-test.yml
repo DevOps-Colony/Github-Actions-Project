@@ -39,16 +39,17 @@ jobs:
 
       - name: Upload Test Results
         if: always()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: test-results
           path: target/surefire-reports/
+          retention-days: 14
 
       - name: Generate JaCoCo Coverage Report
         run: mvn jacoco:report
 
       - name: Upload Coverage Report
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: coverage-report
           path: target/site/jacoco/
