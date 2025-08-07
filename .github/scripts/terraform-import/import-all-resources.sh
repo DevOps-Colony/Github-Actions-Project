@@ -198,6 +198,7 @@ if resource_exists_aws "aws ec2 describe-security-groups --region $AWS_REGION --
 fi
 
 
+
 # Import RDS Instance
 if resource_exists_aws "aws rds describe-db-instances --region $AWS_REGION --db-instance-identifier bankapp-${ENVIRONMENT}-db"; then
     safe_import "module.rds.aws_db_instance.main" "bankapp-${ENVIRONMENT}-db" "RDS Instance"
