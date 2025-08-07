@@ -33,7 +33,6 @@ jobs:
             echo "environment=production" >> $GITHUB_OUTPUT
           else
             echo "environment=staging" >> $GITHUB_OUTPUT
-          fi
 
   stage-1-aws-infrastructure:
     name: Deploy AWS Infrastructure (Stage 1)
@@ -75,7 +74,7 @@ jobs:
             -backend-config="region=${{ env.AWS_REGION }}" \
             -backend-config="dynamodb_table=terraform-state-lock-${{ needs.determine-environment.outputs.environment }}"
 
-      - name: Import existing AWS resources
+      - name: Import existing AWS resources (if exist)
         run: |
           chmod +x ../../.github/scripts/terraform-import/import-all-resources.sh
           ../../.github/scripts/terraform-import/import-all-resources.sh \
