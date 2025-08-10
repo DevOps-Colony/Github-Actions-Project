@@ -6,7 +6,7 @@ RUN ls
 
 ENV APP_HOME=/usr/src/app
 
-COPY app/*.jar $APP_HOME/app.jar
+COPY target/*.jar $APP_HOME/app.jar
 
 WORKDIR $APP_HOME
 
