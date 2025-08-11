@@ -2,7 +2,7 @@ name: Deploy Application
 
 on:
   workflow_run:
-    workflows: ["Build and Test"]
+    workflows: ["Infrastructure Deployment"]  # Changed to depend on infrastructure
     types:
       - completed
   workflow_dispatch:
@@ -11,6 +11,7 @@ env:
   JAVA_VERSION: '17'
   AWS_REGION: ap-south-1
   APP_NAME: bankapp
+  TF_STATE_BUCKET: ${{ secrets.TF_STATE_BUCKET }}  # Add this
 
 permissions:
   contents: read
@@ -33,26 +34,48 @@ jobs:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Get ECR Repository
-        id: ecr-repo
-        run: |
-          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
-          echo "repository=${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${APP_NAME}" >> $GITHUB_OUTPUT
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: '1.5.0'
 
-      - name: Get EKS Cluster Name
-        id: get_cluster
+      - name: Get Infrastructure Outputs from Terraform State
+        id: infra-outputs
         run: |
-          CLUSTER_NAME=$(aws eks list-clusters --query 'clusters[0]' --output text)
-          echo "name=${CLUSTER_NAME}" >> $GITHUB_OUTPUT
+          cd infra
+          terraform init \
+            -backend-config="bucket=${{ env.TF_STATE_BUCKET }}" \
+            -backend-config="key=bankapp/${{ github.ref == 'refs/heads/main' && 'production' || 'staging' }}/terraform.tfstate" \
+            -backend-config="region=${{ env.AWS_REGION }}"
+          
+          # Get outputs from Terraform state
+          CLUSTER_NAME=$(terraform output -raw eks_cluster_name)
+          ECR_URL=$(terraform output -raw ecr_repository_url)
+          
+          # Validate outputs exist
+          if [ -z "$CLUSTER_NAME" ] || [ "$CLUSTER_NAME" = "null" ]; then
+            echo "Error: EKS cluster name not found in Terraform state"
+            exit 1
+          fi
+          
+          echo "cluster_name=${CLUSTER_NAME}" >> $GITHUB_OUTPUT
+          echo "ecr_repository_url=${ECR_URL}" >> $GITHUB_OUTPUT
+          echo "Using cluster: ${CLUSTER_NAME}"
 
       - name: Update kubeconfig
         run: |
-          aws eks update-kubeconfig --name ${{ steps.get_cluster.outputs.name }} --region ${{ env.AWS_REGION }}
+          aws eks update-kubeconfig --name ${{ steps.infra-outputs.outputs.cluster_name }} --region ${{ env.AWS_REGION }}
 
       - name: Install Helm
         uses: azure/setup-helm@v3
         with:
           version: v3.12.0
+
+      - name: Wait for Cluster to be Ready
+        run: |
+          echo "Waiting for cluster nodes to be ready..."
+          kubectl get nodes
+          kubectl wait --for=condition=Ready nodes --all --timeout=300s
 
       - name: Deploy with Helm
         env:
@@ -60,7 +83,7 @@ jobs:
         run: |
           helm upgrade --install ${{ env.APP_NAME }}-${{ env.ENVIRONMENT }} ./helm/bankapp \
             --namespace ${{ env.ENVIRONMENT }} --create-namespace \
-            --set image.repository=${{ steps.ecr-repo.outputs.repository }} \
+            --set image.repository=${{ steps.infra-outputs.outputs.ecr_repository_url }} \
             --set image.tag=${{ github.sha }} \
             -f ./helm/bankapp/values-${{ env.ENVIRONMENT }}.yaml \
             --wait --timeout 10m
@@ -70,3 +93,4 @@ jobs:
           ENVIRONMENT: ${{ github.ref == 'refs/heads/main' && 'production' || 'staging' }}
         run: |
           kubectl rollout status deployment/${{ env.APP_NAME }} -n ${{ env.ENVIRONMENT }} --timeout=5m
+          kubectl get pods -n ${{ env.ENVIRONMENT }}
