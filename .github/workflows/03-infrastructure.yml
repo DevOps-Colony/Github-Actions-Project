@@ -19,44 +19,14 @@ permissions:
   id-token: write
 
 jobs:
-  terraform:
-    name: Validate Terraform
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-
-      - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: ${{ env.TERRAFORM_VERSION }}
-
-      - name: Terraform Format
-        run: terraform fmt -check -recursive
-        working-directory: infra
-
-      - name: Terraform Init
-        run: terraform init
-        working-directory: infra
-
-      - name: Terraform Validate
-        run: terraform validate
-        working-directory: infra
-
   deploy-infrastructure:
     name: Deploy Infrastructure
-    needs: validate
     runs-on: ubuntu-latest
     environment: ${{ github.ref == 'refs/heads/main' && 'production' || 'staging' }}
     outputs:
       ecr_repository_url: ${{ steps.terraform_output.outputs.ecr_repository_url }}
       eks_cluster_name: ${{ steps.terraform_output.outputs.eks_cluster_name }}
+
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -66,20 +36,30 @@ jobs:
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
+          audience: sts.amazonaws.com
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: ${{ env.TERRAFORM_VERSION }}
 
-      - name: Terraform Init
-        run: terraform init
+      - name: Terraform Init and Format
+        run: |
+          terraform init
+          terraform fmt -check -recursive
+        working-directory: infra
+
+      - name: Terraform Validate
+        run: terraform validate -no-color
         working-directory: infra
 
       - name: Create ECR Repository
         run: |
-          aws ecr describe-repositories --repository-names ${{ env.APP_NAME }} || \
-          aws ecr create-repository --repository-name ${{ env.APP_NAME }}
+          aws ecr describe-repositories --repository-names ${{ env.APP_NAME }} 2>/dev/null || \
+          aws ecr create-repository \
+            --repository-name ${{ env.APP_NAME }} \
+            --image-scanning-configuration scanOnPush=true \
+            --tags Key=Environment,Value=${{ github.ref == 'refs/heads/main' && 'production' || 'staging' }}
 
       - name: Terraform Plan
         id: plan
@@ -99,16 +79,16 @@ jobs:
       - name: Output Infrastructure Values
         id: terraform_output
         run: |
-          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
-          echo "ecr_repository_url=${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${APP_NAME}" >> $GITHUB_OUTPUT
+          echo "ecr_repository_url=$(terraform output -raw ecr_repository_url)" >> $GITHUB_OUTPUT
           echo "eks_cluster_name=$(terraform output -raw eks_cluster_name)" >> $GITHUB_OUTPUT
         working-directory: infra
 
-  configure-kubernetes:
-    name: Configure Kubernetes
+  setup-kubernetes:
+    name: Setup Kubernetes Components
     needs: deploy-infrastructure
     runs-on: ubuntu-latest
     environment: ${{ github.ref == 'refs/heads/main' && 'production' || 'staging' }}
+
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -118,6 +98,7 @@ jobs:
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
+          audience: sts.amazonaws.com
 
       - name: Update kubeconfig
         run: |
@@ -139,7 +120,8 @@ jobs:
             -n kube-system \
             --set clusterName=${{ needs.deploy-infrastructure.outputs.eks_cluster_name }} \
             --set serviceAccount.create=true \
-            --set region=${{ env.AWS_REGION }}
+            --set region=${{ env.AWS_REGION }} \
+            --wait
 
       - name: Deploy Metrics Server
         run: |
