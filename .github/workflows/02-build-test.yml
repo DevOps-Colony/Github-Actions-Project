@@ -6,6 +6,9 @@ on:
     types:
       - completed
     branches: [ main, develop ]
+permissions:
+  id-token: write
+  contents: read        
 
 env:
   JAVA_VERSION: '17'
