@@ -2,7 +2,7 @@ name: Build and Test
 
 on:
   workflow_run:
-    workflows: ["Security Scan"]
+    workflows: ["Infrastructure Deployment", "Security Scan"]
     types:
       - completed
     branches: [ main, develop ]
@@ -19,7 +19,11 @@ jobs:
   build-and-test:
     name: Build and Unit Tests
     runs-on: ubuntu-latest
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    if: |
+      github.event.workflow_run.conclusion == 'success' && (
+        (github.event.workflow_run.name == 'Security Scan' && github.event.workflow_run.head_branch == github.ref_name) ||
+        (github.event.workflow_run.name == 'Infrastructure Deployment' && contains(github.event.workflow_run.head_branch, github.ref_name))
+      )
 
     steps:
       - name: Checkout Repository
