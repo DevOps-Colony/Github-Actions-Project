@@ -2,9 +2,9 @@ name: Security Scan
 
 on:
   pull_request:
-    branches: [ main, develop ]
+    branches: [ main, develo ]
   push:
-    branches: [ main, develop ]
+    branches: [ main, develo ]
   schedule:
     - cron: '0 0 * * *'  # Daily at midnight
 

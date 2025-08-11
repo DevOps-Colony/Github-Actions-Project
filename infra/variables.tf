@@ -1,9 +1,3 @@
-variable "aws_region" {
-  description = "AWS Region where resources will be created"
-  type        = string
-  default     = null # Will be set via environment variable TF_VAR_aws_region
-}
-
 variable "project_name" {
   description = "Name of the project"
   type        = string

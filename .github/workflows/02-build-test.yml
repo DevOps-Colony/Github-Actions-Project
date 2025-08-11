@@ -5,7 +5,7 @@ on:
     workflows: ["Infrastructure Deployment", "Security Scan"]
     types:
       - completed
-    branches: [ main, develop ]
+    branches: [ main, develo ]
 permissions:
   id-token: write
   contents: read        
