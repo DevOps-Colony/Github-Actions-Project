@@ -10,7 +10,7 @@ on:
 env:
   JAVA_VERSION: '17'
   AWS_REGION: ap-south-1
-  DOCKER_IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/bankapp
+  APP_NAME: bankapp
 
 permissions:
   contents: read
@@ -18,9 +18,9 @@ permissions:
 
 jobs:
   deploy:
-    name: Deploy to Environment
+    name: Build and Deploy
     runs-on: ubuntu-latest
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
     environment: ${{ github.ref == 'refs/heads/main' && 'production' || 'staging' }}
 
     steps:
@@ -33,21 +33,62 @@ jobs:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
+      - name: Get ECR Repository
+        id: ecr-repo
+        run: |
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          echo "repository=${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${APP_NAME}" >> $GITHUB_OUTPUT
+
+      - name: Login to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Set up JDK
+        uses: actions/setup-java@v3
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: 'temurin'
+          cache: maven
+
+      - name: Build Application
+        run: mvn clean package -DskipTests
+
+      - name: Build and Push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ steps.ecr-repo.outputs.repository }}:${{ github.sha }}
+            ${{ steps.ecr-repo.outputs.repository }}:latest
+
       - name: Get EKS Cluster Name
         id: get_cluster
         run: |
-          CLUSTER_NAME=$(aws eks list-clusters --region ${{ env.AWS_REGION }} --query 'clusters[?contains(@, `${{ github.ref == 'refs/heads/main' && 'production' || 'staging' }}`) == `true`]' --output text)
-          echo "cluster_name=${CLUSTER_NAME}" >> $GITHUB_OUTPUT
+          CLUSTER_NAME=$(aws eks list-clusters --query 'clusters[0]' --output text)
+          echo "name=${CLUSTER_NAME}" >> $GITHUB_OUTPUT
 
       - name: Update kubeconfig
-        run: aws eks update-kubeconfig --name ${{ steps.get_cluster.outputs.cluster_name }} --region ${{ env.AWS_REGION }}
+        run: |
+          aws eks update-kubeconfig --name ${{ steps.get_cluster.outputs.name }} --region ${{ env.AWS_REGION }}
 
-      - name: Deploy to Kubernetes
+      - name: Install Helm
+        uses: azure/setup-helm@v3
+        with:
+          version: v3.12.0
+
+      - name: Deploy with Helm
         env:
           ENVIRONMENT: ${{ github.ref == 'refs/heads/main' && 'production' || 'staging' }}
-          IMAGE_TAG: ${{ github.sha }}
         run: |
-          cd k8s/overlays/$ENVIRONMENT
-          kustomize edit set image ${{ env.DOCKER_IMAGE }}=${{ env.DOCKER_IMAGE }}:${{ github.sha }}
-          kustomize build . | kubectl apply -f -
-          kubectl rollout status deployment/bankapp -n default
+          helm upgrade --install ${{ env.APP_NAME }}-${{ env.ENVIRONMENT }} ./helm/bankapp \
+            --namespace ${{ env.ENVIRONMENT }} --create-namespace \
+            --set image.repository=${{ steps.ecr-repo.outputs.repository }} \
+            --set image.tag=${{ github.sha }} \
+            -f ./helm/bankapp/values-${{ env.ENVIRONMENT }}.yaml \
+            --wait --timeout 10m
+
+      - name: Verify Deployment
+        env:
+          ENVIRONMENT: ${{ github.ref == 'refs/heads/main' && 'production' || 'staging' }}
+        run: |
+          kubectl rollout status deployment/${{ env.APP_NAME }} -n ${{ env.ENVIRONMENT }} --timeout=5m

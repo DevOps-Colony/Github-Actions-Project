@@ -6,18 +6,20 @@ on:
     paths:
       - 'infra/**'
       - '.github/workflows/03-infrastructure.yml'
+      - 'helm/**'
   workflow_dispatch:
 
 env:
   AWS_REGION: ap-south-1
   TERRAFORM_VERSION: '1.5.0'
+  APP_NAME: bankapp
   
 permissions:
   contents: read
   id-token: write
 
 jobs:
-  validate:
+  terraform:
     name: Validate Terraform
     runs-on: ubuntu-latest
     steps:
@@ -52,6 +54,9 @@ jobs:
     needs: validate
     runs-on: ubuntu-latest
     environment: ${{ github.ref == 'refs/heads/main' && 'production' || 'staging' }}
+    outputs:
+      ecr_repository_url: ${{ steps.terraform_output.outputs.ecr_repository_url }}
+      eks_cluster_name: ${{ steps.terraform_output.outputs.eks_cluster_name }}
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -71,10 +76,19 @@ jobs:
         run: terraform init
         working-directory: infra
 
+      - name: Create ECR Repository
+        run: |
+          aws ecr describe-repositories --repository-names ${{ env.APP_NAME }} || \
+          aws ecr create-repository --repository-name ${{ env.APP_NAME }}
+
       - name: Terraform Plan
         id: plan
         run: |
-          terraform plan -input=false -var="environment=${{ github.ref == 'refs/heads/main' && 'production' || 'staging' }}" -out=tfplan
+          terraform plan \
+            -var="environment=${{ github.ref == 'refs/heads/main' && 'production' || 'staging' }}" \
+            -var="app_name=${{ env.APP_NAME }}" \
+            -var="region=${{ env.AWS_REGION }}" \
+            -out=tfplan
         working-directory: infra
 
       - name: Terraform Apply
@@ -85,6 +99,48 @@ jobs:
       - name: Output Infrastructure Values
         id: terraform_output
         run: |
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          echo "ecr_repository_url=${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${APP_NAME}" >> $GITHUB_OUTPUT
           echo "eks_cluster_name=$(terraform output -raw eks_cluster_name)" >> $GITHUB_OUTPUT
-          echo "load_balancer_dns=$(terraform output -raw load_balancer_dns)" >> $GITHUB_OUTPUT
         working-directory: infra
+
+  configure-kubernetes:
+    name: Configure Kubernetes
+    needs: deploy-infrastructure
+    runs-on: ubuntu-latest
+    environment: ${{ github.ref == 'refs/heads/main' && 'production' || 'staging' }}
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Update kubeconfig
+        run: |
+          aws eks update-kubeconfig --name ${{ needs.deploy-infrastructure.outputs.eks_cluster_name }} --region ${{ env.AWS_REGION }}
+
+      - name: Install Helm
+        uses: azure/setup-helm@v3
+        with:
+          version: v3.12.0
+
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v3
+
+      - name: Deploy ALB Ingress Controller
+        run: |
+          helm repo add eks https://aws.github.io/eks-charts
+          helm repo update
+          helm upgrade --install aws-load-balancer-controller eks/aws-load-balancer-controller \
+            -n kube-system \
+            --set clusterName=${{ needs.deploy-infrastructure.outputs.eks_cluster_name }} \
+            --set serviceAccount.create=true \
+            --set region=${{ env.AWS_REGION }}
+
+      - name: Deploy Metrics Server
+        run: |
+          kubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml
