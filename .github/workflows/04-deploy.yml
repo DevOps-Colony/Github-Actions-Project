@@ -39,28 +39,6 @@ jobs:
           ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
           echo "repository=${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${APP_NAME}" >> $GITHUB_OUTPUT
 
-      - name: Login to Amazon ECR
-        uses: aws-actions/amazon-ecr-login@v2
-
-      - name: Set up JDK
-        uses: actions/setup-java@v3
-        with:
-          java-version: ${{ env.JAVA_VERSION }}
-          distribution: 'temurin'
-          cache: maven
-
-      - name: Build Application
-        run: mvn clean package -DskipTests
-
-      - name: Build and Push Docker image
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          push: true
-          tags: |
-            ${{ steps.ecr-repo.outputs.repository }}:${{ github.sha }}
-            ${{ steps.ecr-repo.outputs.repository }}:latest
-
       - name: Get EKS Cluster Name
         id: get_cluster
         run: |

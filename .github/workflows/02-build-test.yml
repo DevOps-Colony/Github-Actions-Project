@@ -9,6 +9,8 @@ on:
 
 env:
   JAVA_VERSION: '17'
+  AWS_REGION: ap-south-1
+  APP_NAME: bankapp
 
 jobs:
   build-and-test:
@@ -60,9 +62,9 @@ jobs:
     name: Build and Push Docker Image
     needs: build-and-test
     runs-on: ubuntu-latest
-    if: github.event_name == 'push'
-    env:
-      APP_NAME: bankapp
+    environment: ${{ github.ref == 'refs/heads/main' && 'production' || 'staging' }}
+    outputs:
+      image_uri: ${{ steps.ecr-url.outputs.repository }}
 
     steps:
       - name: Checkout Repository
@@ -72,12 +74,15 @@ jobs:
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-          aws-region: ap-south-1
+          aws-region: ${{ env.AWS_REGION }}
 
       - name: Create ECR Repository
         run: |
-          aws ecr describe-repositories --repository-names ${{ env.APP_NAME }} || \
-          aws ecr create-repository --repository-name ${{ env.APP_NAME }}
+          aws ecr describe-repositories --repository-names ${{ env.APP_NAME }} 2>/dev/null || \
+          aws ecr create-repository \
+            --repository-name ${{ env.APP_NAME }} \
+            --image-scanning-configuration scanOnPush=true \
+            --tags Key=Environment,Value=${{ github.ref == 'refs/heads/main' && 'production' || 'staging' }}
 
       - name: Login to Amazon ECR
         id: login-ecr
@@ -90,7 +95,7 @@ jobs:
         id: ecr-url
         run: |
           ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
-          echo "repository=${ACCOUNT_ID}.dkr.ecr.ap-south-1.amazonaws.com/${APP_NAME}" >> $GITHUB_OUTPUT
+          echo "repository=${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${APP_NAME}" >> $GITHUB_OUTPUT
 
       - name: Build and Push Docker image
         uses: docker/build-push-action@v5
