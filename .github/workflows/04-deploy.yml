@@ -2,7 +2,7 @@ name: Deploy Application
 
 on:
   workflow_run:
-    workflows: ["Infrastructure Deployment"]  # Changed to depend on infrastructure
+    workflows: ["Build and Test"]
     types:
       - completed
   workflow_dispatch:

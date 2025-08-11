@@ -14,6 +14,10 @@ terraform {
       version = "~> 2.10"
     }
   }
+
+  backend "s3" {
+    # These will be filled by backend-config
+  }
 }
 
 # S3 Backend for Terraform State

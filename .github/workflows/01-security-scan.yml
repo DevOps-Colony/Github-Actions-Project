@@ -1,9 +1,10 @@
 name: Security Scan
 
 on:
-  pull_request:
-    branches: [ main, develop ]
-  push:
+  workflow_run:
+    workflows: ["Infrastructure Deployment"]
+    types:
+      - completed
     branches: [ main, develop ]
   schedule:
     - cron: '0 0 * * *'  # Daily at midnight
